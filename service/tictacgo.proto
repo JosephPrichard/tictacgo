@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+option go_package = "TicTacGo/service";
+
+package service;
+
+import "google/protobuf/timestamp.proto";
+
+service TicTacGoService {
+    rpc GetGames (GetGamesReq) returns (Games) {}
+
+    rpc GetGame (GetGameReq) returns (Game) {}
+
+    rpc CreateGame (CreateGameReq) returns (Game) {}
+
+    rpc MakeMove (MakeMoveReq) returns (Game) {}
+
+    rpc ListenSteps (GetGameReq) returns (stream Step) {} 
+
+    rpc Login (CredentialsReq) returns (AuthToken) {}
+
+    rpc WhoAmI (AuthToken) returns (Player) {}
+
+    rpc CreatePlayer (CredentialsReq) returns (Player) {}
+}
+
+message Player {
+    int64 id = 1;
+    string username = 2;
+}
+
+message Game {
+    int64 id = 1;
+    Player xPlayer = 2;
+    Player oPlayer = 3;
+    int32 boardState = 4;
+    bool xTurn = 5;
+    google.protobuf.Timestamp updated_on = 6;
+    google.protobuf.Timestamp started_on = 7;
+    int32 result = 8;
+    repeated Step steps = 9;
+}
+
+message Games {
+    repeated Game games = 1;
+}
+
+message Step {
+    int64 gameId = 1;
+    int32 ord = 2;
+    int32 moveRow = 3;
+    int32 moveCol = 4;
+    int32 board = 5;
+    bool xTurn = 6;
+    int32 result = 7;
+}
+
+message AuthToken {
+    string token = 1;
+}
+
+message GetGamesReq {
+    int32 page = 1;
+    int64 xPlayer = 2;
+    int64 oPlayer = 3;
+}
+
+message GetGameReq {
+    int64 id = 1;
+}
+
+message CreateGameReq {
+    AuthToken token = 1;
+}
+
+message MakeMoveReq {
+    AuthToken token = 1;
+    int64 row = 2;
+    int64 col = 3;
+    int64 gameId = 4;
+}
+
+message CredentialsReq {
+    string username = 1;
+    string password = 2;
+}
