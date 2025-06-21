@@ -1,15 +1,20 @@
 package tictactoe
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
 const Playing int32 = 0
 const XWon int32 = 1
 const OWon int32 = 2
 const Draw int32 = 3
 
-const Empty int32 = 0b00
-const X int32 = 0b01
-const O int32 = 0b10
+const E uint8 = 0b00
+const X uint8 = 0b01
+const O uint8 = 0b10
+
+type Board = [9]uint8
 
 type Tile struct {
 	Row int32
@@ -39,28 +44,39 @@ var winLines = [][]Tile{
 	{topRight, middle, bottomLeft},    // Diagonal /
 }
 
-func NewBoard() (int32, bool) {
-	return 0, true
+func NewBoard() (Board, bool) {
+	return Board{}, true
 }
 
-func GetTile(board int32, tile Tile) int32 {
-	return GetTileIndex(board, tile.Row*3+tile.Col)
+var ErrTile = errors.New("tile is invalid")
+var ErrOccupied = errors.New("value at tile is not empty")
+
+func GetIndex(tile Tile) int32 {
+	return tile.Row*3 + tile.Col
 }
 
-func GetTileIndex(board int32, index int32) int32 {
-	return (board << (index * 2) & 0b11)
-}
+func MoveBoard(board Board, turn bool, row int32, col int32, value uint8) (Board, bool, error) {
+	tile := Tile{Row: int32(row), Col: int32(col)}
+	if tile.Row < 0 || tile.Col < 0 || tile.Row > 2 && tile.Col > 2 {
+		return board, turn, ErrTile
+	}
+	index := GetIndex(tile)
 
-func MoveBoard(board int32, turn bool, tile Tile, value int32) (int32, bool, error) {
+	t := board[index]
+	if t != E {
+		return board, turn, ErrOccupied
+	}
+
+	board[index] = value
 	return board, !turn, nil
 }
 
-func GetResult(board int32) int32 {
+func GetResult(board Board) int32 {
 	for _, line := range winLines {
-		value0 := GetTile(board, line[0])
-		value1 := GetTile(board, line[1])
-		value2 := GetTile(board, line[2])
-		if value0 != Empty && value0 == value1 && value1 == value2 {
+		value0 := board[GetIndex(line[0])]
+		value1 := board[GetIndex(line[1])]
+		value2 := board[GetIndex(line[2])]
+		if value0 != E && value0 == value1 && value1 == value2 {
 			switch value0 {
 			case X:
 				return XWon
@@ -72,8 +88,8 @@ func GetResult(board int32) int32 {
 
 	isDraw := true
 	for _, tile := range allLines {
-		value := GetTile(board, tile)
-		isDraw = isDraw && value != Empty
+		value := board[GetIndex(tile)]
+		isDraw = isDraw && value != E
 	}
 	if isDraw {
 		return Draw
@@ -82,9 +98,9 @@ func GetResult(board int32) int32 {
 	return Playing
 }
 
-func RuneToTile(tile int32) rune {
+func RuneToTile(tile uint8) rune {
 	switch tile {
-	case Empty:
+	case E:
 		return ' '
 	case X:
 		return 'X'
@@ -95,21 +111,22 @@ func RuneToTile(tile int32) rune {
 	}
 }
 
-func BoardToString(board int32) string {
+func BoardToString(board Board) string {
 	var sb strings.Builder
+	sb.WriteRune('\n')
 	for i := range 9 {
-		sb.WriteRune(RuneToTile(GetTileIndex(board, int32(i))))
-		if i%3 == 0 {
+		tile := board[i]
+		runeTile := RuneToTile(tile)
+		sb.WriteRune(runeTile)
+		if (i+1)%3 == 0 && i != 8 {
 			sb.WriteRune('\n')
-			if i != 0 {
-				sb.WriteRune('-')
-				sb.WriteRune('+')
-				sb.WriteRune('-')
-				sb.WriteRune('+')
-				sb.WriteRune('-')
-				sb.WriteRune('\n')
-			}
-		} else {
+			sb.WriteRune('-')
+			sb.WriteRune('+')
+			sb.WriteRune('-')
+			sb.WriteRune('+')
+			sb.WriteRune('-')
+			sb.WriteRune('\n')
+		} else if (i+1)%3 != 0 {
 			sb.WriteRune('|')
 		}
 	}

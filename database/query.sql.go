@@ -34,7 +34,7 @@ type GetGameRow struct {
 	ID          int64
 	XPlayer     int64
 	OPlayer     pgtype.Int8
-	BoardState  int32
+	BoardState  []byte
 	XTurn       pgtype.Bool
 	UpdatedOn   pgtype.Timestamp
 	StartedOn   pgtype.Timestamp
@@ -94,7 +94,7 @@ type GetGamesRow struct {
 	ID          int64
 	XPlayer     int64
 	OPlayer     pgtype.Int8
-	BoardState  int32
+	BoardState  []byte
 	XTurn       pgtype.Bool
 	UpdatedOn   pgtype.Timestamp
 	StartedOn   pgtype.Timestamp
@@ -274,7 +274,7 @@ RETURNING id
 type InsertGameParams struct {
 	XPlayer    int64
 	OPlayer    pgtype.Int8
-	BoardState int32
+	BoardState []byte
 	XTurn      pgtype.Bool
 	UpdatedOn  pgtype.Timestamp
 	StartedOn  pgtype.Timestamp
@@ -342,7 +342,7 @@ type InsertStepParams struct {
 	Ord     int32
 	MoveRow int32
 	MoveCol int32
-	Board   int32
+	Board   []byte
 	XTurn   bool
 }
 
@@ -364,7 +364,7 @@ WHERE id = $5
 `
 
 type UpdateGameParams struct {
-	BoardState int32
+	BoardState []byte
 	XTurn      pgtype.Bool
 	UpdatedOn  pgtype.Timestamp
 	Result     int32

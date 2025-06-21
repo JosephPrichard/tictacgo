@@ -6,42 +6,55 @@ import (
 )
 
 func TestMoveBoard(t *testing.T) {
-	tile := Tile{Row: 0, Col: 0}
-	value := X
-
-	board, turn := NewBoard()
-	board, turn, err := MoveBoard(board, turn, tile, value)
-
-	if err != nil {
-		t.Fatalf("error while moving board: %v, err: %v", board, err)
+	type Test struct {
+		board         Board
+		tile          Tile
+		value         uint8
+		expectedBoard Board
+		expectedErr   error
 	}
 
-	expectedBoard := 0
-	expectedTurn := false
-
-	if !reflect.DeepEqual(expectedBoard, 0) {
-		t.Fatalf("expected board: %v, got: %v", expectedBoard, 0)
-	}
-	if turn != expectedTurn {
-		t.Fatalf("expected turn: %v, got: %v", expectedTurn, false)
+	tests := []Test{
+		{board: Board{E, X, E, E, X, E, E, X, E}, tile: Tile{Row: 1, Col: 2}, value: X, expectedBoard: Board{E, X, E, E, X, X, E, X, E}},
+		{board: Board{O, E, E, E, O, E, E, E, O}, tile: Tile{Row: 2, Col: 1}, value: O, expectedBoard: Board{O, E, E, E, O, E, E, O, O}},
+		{board: Board{X, O, X, X, O, O, O, X, O}, tile: Tile{Row: 1, Col: 0}, value: O, expectedErr: ErrOccupied},
 	}
 
-	t.Logf("passed MoveBoard test: move: %v to %d, board: %v", tile, value, BoardToString(board))
+	for _, test := range tests {
+		board, turn, err := MoveBoard(test.board, false, test.tile.Row, test.tile.Col, test.value)
+
+		t.Logf("ran test for board\ninput: %v\noutput: %v\nexpected: %v", BoardToString(test.board), BoardToString(board), BoardToString(test.expectedBoard))
+
+		if err != test.expectedErr {
+			t.Fatalf("error while calling MoveBoard, expected err: %v, got: %v", test.expectedErr, err)
+		} else if err == nil {
+			if !reflect.DeepEqual(test.expectedBoard, board) {
+				t.Fatalf("expected board: %v, got: %v", test.expectedBoard, board)
+			}
+			if !turn {
+				t.Fatalf("expected turn: %v, got: %v", false, turn)
+			}
+		}
+		t.Logf("passed MoveBoard test: move: %v to %d, board: %v", test.tile, test.value, BoardToString(board))
+	}
 }
 
 func TestGetResult(t *testing.T) {
 	type Test struct {
-		board          int32
+		board          Board
 		expectedResult int32
 	}
 
 	tests := []Test{
-		{board: 0b0, expectedResult: Playing},
-		{board: 0b000100000100000100, expectedResult: XWon},
-		{board: 0b100000001000000010, expectedResult: OWon},
+		{board: Board{}, expectedResult: Playing},
+		{board: Board{E, X, E, E, X, E, E, X, E}, expectedResult: XWon},
+		{board: Board{O, E, E, E, O, E, E, E, O}, expectedResult: OWon},
+		{board: Board{X, O, X, X, O, O, O, X, O}, expectedResult: Draw},
 	}
 
 	for _, test := range tests {
+		t.Logf("running test for board: %v", BoardToString(test.board))
+
 		result := GetResult(test.board)
 		if result != test.expectedResult {
 			t.Fatalf("expected result: %v, got: %v", test.expectedResult, result)

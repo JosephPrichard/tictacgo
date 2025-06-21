@@ -15,7 +15,7 @@ CREATE TABLE games (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     x_player BIGINT NOT NULL REFERENCES player_accounts(id),
     o_player BIGINT REFERENCES player_accounts(id),
-    board_state INTEGER NOT NULL,
+    board_state BYTEA NOT NULL,
     x_turn BOOLEAN,
     updated_on TIMESTAMP NOT NULL,
     started_on TIMESTAMP NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE game_steps (
     ord INTEGER NOT NULL,
     move_row INTEGER NOT NULL,
     move_col INTEGER NOT NULL,
-    board INTEGER NOT NULL,
+    board BYTEA NOT NULL,
     x_turn BOOLEAN NOT NULL,
     result INTEGER NOT NULL,
     PRIMARY KEY(game_id, ord)

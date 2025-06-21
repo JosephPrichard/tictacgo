@@ -12,7 +12,7 @@ type Game struct {
 	ID         int64
 	XPlayer    int64
 	OPlayer    pgtype.Int8
-	BoardState int32
+	BoardState []byte
 	XTurn      pgtype.Bool
 	UpdatedOn  pgtype.Timestamp
 	StartedOn  pgtype.Timestamp
@@ -24,7 +24,7 @@ type GameStep struct {
 	Ord     int32
 	MoveRow int32
 	MoveCol int32
-	Board   int32
+	Board   []byte
 	XTurn   bool
 	Result  int32
 }

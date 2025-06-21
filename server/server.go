@@ -34,6 +34,7 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *service.CreateGameReq) 
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
 
+	// get the session for the provided token
 	token := string(in.GetToken().Token)
 
 	log.Printf("called CreateGame with token: %v", token)
@@ -43,12 +44,16 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *service.CreateGameReq) 
 		return nil, status.Errorf(codes.Internal, "failed to retrieve session: %v", err)
 	}
 
+	// insert the newly constructed game
 	timeNow := time.Now()
 	board, turn := tictactoe.NewBoard()
 
+	boardState := make([]byte, 9)
+	copy(boardState, board[:])
+
 	params := database.InsertGameParams{
 		XPlayer:    sessRow.ID,
-		BoardState: board,
+		BoardState: boardState,
 		XTurn:      pgtype.Bool{Bool: turn, Valid: true},
 		UpdatedOn:  pgtype.Timestamp{Time: timeNow, Valid: true},
 		StartedOn:  pgtype.Timestamp{Time: timeNow, Valid: true},
@@ -62,6 +67,7 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *service.CreateGameReq) 
 
 	log.Printf("inserted game with params: %v", params)
 
+	// construct the game response for client
 	game := service.Game{
 		Id: gameId,
 		XPlayer: &service.Player{
@@ -75,7 +81,7 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *service.CreateGameReq) 
 		Steps:      []*service.Step{},
 	}
 
-	log.Printf("successfully created game: %v, board: %s", game.String(), tictactoe.BoardToString(game.BoardState))
+	log.Printf("successfully created game: %v, board: %s", game.String(), tictactoe.BoardToString(board))
 
 	return &game, nil
 }
@@ -118,7 +124,6 @@ func (s *GrpcServer) GetGame(ctx context.Context, in *service.GetGameReq) (*serv
 	}
 
 	game := MapGetGame(row)
-
 	log.Printf("successfully fetched game: %v", game.String())
 
 	return game, nil
@@ -129,6 +134,7 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *service.GetGamesReq) (*se
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
 
+	// prepare arguments for fetching the games from the database
 	var xPlayerParam pgtype.Int8
 	var oPlayerParam pgtype.Int8
 
@@ -153,6 +159,7 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *service.GetGamesReq) (*se
 		gameIds = append(gameIds, int64(i))
 	}
 
+	// fetch games and steps from the database at the same time
 	var eg *errgroup.Group
 	eg, ctx = errgroup.WithContext(ctx)
 
@@ -183,17 +190,18 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *service.GetGamesReq) (*se
 		return nil, err
 	}
 
+	// construct a response and a log for each game
 	games := MapGetGames(gameRows, stepRows)
 
-	var gamesSb strings.Builder
+	var sb strings.Builder
 	for i, game := range games {
-		gamesSb.WriteString(game.String())
+		sb.WriteString(game.String())
 		if i < len(games) {
-			gamesSb.WriteRune(',')
-			gamesSb.WriteRune(' ')
+			sb.WriteRune(',')
+			sb.WriteRune(' ')
 		}
 	}
-	log.Printf("retrieved games with for page=%d, firstPlayer=%d, secondPlayer=%d with value: [%s]", in.Page, in.XPlayer, in.OPlayer, gamesSb.String())
+	log.Printf("retrieved games with for page=%d, firstPlayer=%d, secondPlayer=%d with value: [%s]", in.Page, in.XPlayer, in.OPlayer, sb.String())
 
 	return &service.Games{Games: games}, nil
 }
@@ -210,7 +218,10 @@ func (s *GrpcServer) ListenSteps(in *service.GetGameReq, stream grpc.ServerStrea
 		}
 
 		step := MapStep(row)
-		log.Fatalf("recieved step on time: %s, with value: %v, board: %v", t, step, tictactoe.BoardToString(step.Board))
+
+		board := tictactoe.Board{}
+		copy(board[:], step.Board)
+		log.Fatalf("recieved step on time: %s, with value: %v, board: %v", t, step, tictactoe.BoardToString(board))
 
 		stream.Send(step)
 
@@ -227,6 +238,7 @@ func (s *GrpcServer) Login(ctx context.Context, in *service.CredentialsReq) (*se
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
 
+	// retrieve if the user credentials are valid
 	verify := database.VerifyPlayerParams{
 		Username: in.Username,
 		Passwd:   in.Password,
@@ -245,10 +257,9 @@ func (s *GrpcServer) Login(ctx context.Context, in *service.CredentialsReq) (*se
 		log.Printf("expected VerifyPlayerRows to be less than or equal to 1, was %d", len(rows))
 	}
 
+	// insert the session from the logged in player
 	verifiedPlayer := rows[0]
-
 	token := uuid.New().String()
-
 	session := database.InsertSessionParams{
 		Token:    token,
 		PlayerID: verifiedPlayer.ID,
@@ -272,6 +283,7 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*se
 
 	token := in.GetToken().Token
 
+	// fetch session and game at the same time
 	var eg *errgroup.Group
 	eg, ctx = errgroup.WithContext(ctx)
 
@@ -302,6 +314,7 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*se
 		return nil, err
 	}
 
+	// perform validations for the input based on game state
 	if gameRow.Result != tictactoe.Playing {
 		return nil, status.Errorf(codes.InvalidArgument, "cannot make move on game: %d, game is not in play", in.GameId)
 	}
@@ -312,24 +325,32 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*se
 		return nil, status.Errorf(codes.InvalidArgument, "cannot make move on game: %d, it isn't player's turn, expected: %d, received: %d", in.GameId, gameRow.OPlayer.Int64, sessRow.ID)
 	}
 
-	var tileValue int32
+	// make state mutations on the tic tac toe board
+	var tileValue uint8
 	if gameRow.XTurn.Bool {
 		tileValue = tictactoe.X
 	} else {
 		tileValue = tictactoe.O
 	}
 
-	board, turn, err := tictactoe.MoveBoard(gameRow.BoardState, gameRow.XTurn.Bool, tictactoe.Tile{Row: int32(in.Row), Col: int32(in.Col)}, tileValue)
+	board := tictactoe.Board{}
+	copy(board[:], gameRow.BoardState)
+
+	board, turn, err := tictactoe.MoveBoard(board, gameRow.XTurn.Bool, in.Row, in.Col, tileValue)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot make move on game: %d, move (%d,%d) is invalid, board: %v", in.GameId, in.Row, in.Col, tictactoe.BoardToString(gameRow.BoardState))
+		return nil, status.Errorf(codes.InvalidArgument, "cannot make move on game: %d, %s", in.GameId, err.Error())
 	}
-	log.Printf("made move on game: %d, board: %v", in.GameId, tictactoe.BoardToString(gameRow.BoardState))
+	log.Printf("made move on game: %d, board: %v", in.GameId, tictactoe.BoardToString(board))
 
 	result := tictactoe.GetResult(board)
 
+	boardState := make([]byte, 9)
+	copy(boardState, board[:])
+
+	// begin transaction to persist game state and game step to the database
 	gameParams := database.UpdateGameParams{
 		ID:         gameRow.ID,
-		BoardState: board,
+		BoardState: boardState,
 		XTurn:      pgtype.Bool{Bool: turn, Valid: true},
 		UpdatedOn:  pgtype.Timestamp{Time: time.Now(), Valid: true},
 		Result:     result,
@@ -366,6 +387,7 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*se
 		return nil, status.Errorf(codes.Internal, "failed to commit UpdateGame and InsertStep transaction")
 	}
 
+	// contruct the game response for client
 	game := MapGetGame(gameRow)
 
 	game.BoardState = gameParams.BoardState

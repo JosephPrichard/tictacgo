@@ -79,7 +79,7 @@ type Game struct {
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	XPlayer       *Player                `protobuf:"bytes,2,opt,name=xPlayer,proto3" json:"xPlayer,omitempty"`
 	OPlayer       *Player                `protobuf:"bytes,3,opt,name=oPlayer,proto3" json:"oPlayer,omitempty"`
-	BoardState    int32                  `protobuf:"varint,4,opt,name=boardState,proto3" json:"boardState,omitempty"`
+	BoardState    []byte                 `protobuf:"bytes,4,opt,name=boardState,proto3" json:"boardState,omitempty"`
 	XTurn         bool                   `protobuf:"varint,5,opt,name=xTurn,proto3" json:"xTurn,omitempty"`
 	UpdatedOn     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_on,json=updatedOn,proto3" json:"updated_on,omitempty"`
 	StartedOn     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=started_on,json=startedOn,proto3" json:"started_on,omitempty"`
@@ -140,11 +140,11 @@ func (x *Game) GetOPlayer() *Player {
 	return nil
 }
 
-func (x *Game) GetBoardState() int32 {
+func (x *Game) GetBoardState() []byte {
 	if x != nil {
 		return x.BoardState
 	}
-	return 0
+	return nil
 }
 
 func (x *Game) GetXTurn() bool {
@@ -232,7 +232,7 @@ type Step struct {
 	Ord           int32                  `protobuf:"varint,2,opt,name=ord,proto3" json:"ord,omitempty"`
 	MoveRow       int32                  `protobuf:"varint,3,opt,name=moveRow,proto3" json:"moveRow,omitempty"`
 	MoveCol       int32                  `protobuf:"varint,4,opt,name=moveCol,proto3" json:"moveCol,omitempty"`
-	Board         int32                  `protobuf:"varint,5,opt,name=board,proto3" json:"board,omitempty"`
+	Board         []byte                 `protobuf:"bytes,5,opt,name=board,proto3" json:"board,omitempty"`
 	XTurn         bool                   `protobuf:"varint,6,opt,name=xTurn,proto3" json:"xTurn,omitempty"`
 	Result        int32                  `protobuf:"varint,7,opt,name=result,proto3" json:"result,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -297,11 +297,11 @@ func (x *Step) GetMoveCol() int32 {
 	return 0
 }
 
-func (x *Step) GetBoard() int32 {
+func (x *Step) GetBoard() []byte {
 	if x != nil {
 		return x.Board
 	}
-	return 0
+	return nil
 }
 
 func (x *Step) GetXTurn() bool {
@@ -513,8 +513,8 @@ func (x *CreateGameReq) GetToken() *AuthToken {
 type MakeMoveReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Token         *AuthToken             `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	Row           int64                  `protobuf:"varint,2,opt,name=row,proto3" json:"row,omitempty"`
-	Col           int64                  `protobuf:"varint,3,opt,name=col,proto3" json:"col,omitempty"`
+	Row           int32                  `protobuf:"varint,2,opt,name=row,proto3" json:"row,omitempty"`
+	Col           int32                  `protobuf:"varint,3,opt,name=col,proto3" json:"col,omitempty"`
 	GameId        int64                  `protobuf:"varint,4,opt,name=gameId,proto3" json:"gameId,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -557,14 +557,14 @@ func (x *MakeMoveReq) GetToken() *AuthToken {
 	return nil
 }
 
-func (x *MakeMoveReq) GetRow() int64 {
+func (x *MakeMoveReq) GetRow() int32 {
 	if x != nil {
 		return x.Row
 	}
 	return 0
 }
 
-func (x *MakeMoveReq) GetCol() int64 {
+func (x *MakeMoveReq) GetCol() int32 {
 	if x != nil {
 		return x.Col
 	}
@@ -643,7 +643,7 @@ const file_service_tictacgo_proto_rawDesc = "" +
 	"\axPlayer\x18\x02 \x01(\v2\x0f.service.PlayerR\axPlayer\x12)\n" +
 	"\aoPlayer\x18\x03 \x01(\v2\x0f.service.PlayerR\aoPlayer\x12\x1e\n" +
 	"\n" +
-	"boardState\x18\x04 \x01(\x05R\n" +
+	"boardState\x18\x04 \x01(\fR\n" +
 	"boardState\x12\x14\n" +
 	"\x05xTurn\x18\x05 \x01(\bR\x05xTurn\x129\n" +
 	"\n" +
@@ -659,7 +659,7 @@ const file_service_tictacgo_proto_rawDesc = "" +
 	"\x03ord\x18\x02 \x01(\x05R\x03ord\x12\x18\n" +
 	"\amoveRow\x18\x03 \x01(\x05R\amoveRow\x12\x18\n" +
 	"\amoveCol\x18\x04 \x01(\x05R\amoveCol\x12\x14\n" +
-	"\x05board\x18\x05 \x01(\x05R\x05board\x12\x14\n" +
+	"\x05board\x18\x05 \x01(\fR\x05board\x12\x14\n" +
 	"\x05xTurn\x18\x06 \x01(\bR\x05xTurn\x12\x16\n" +
 	"\x06result\x18\a \x01(\x05R\x06result\"!\n" +
 	"\tAuthToken\x12\x14\n" +
@@ -675,8 +675,8 @@ const file_service_tictacgo_proto_rawDesc = "" +
 	"\x05token\x18\x01 \x01(\v2\x12.service.AuthTokenR\x05token\"s\n" +
 	"\vMakeMoveReq\x12(\n" +
 	"\x05token\x18\x01 \x01(\v2\x12.service.AuthTokenR\x05token\x12\x10\n" +
-	"\x03row\x18\x02 \x01(\x03R\x03row\x12\x10\n" +
-	"\x03col\x18\x03 \x01(\x03R\x03col\x12\x16\n" +
+	"\x03row\x18\x02 \x01(\x05R\x03row\x12\x10\n" +
+	"\x03col\x18\x03 \x01(\x05R\x03col\x12\x16\n" +
 	"\x06gameId\x18\x04 \x01(\x03R\x06gameId\"H\n" +
 	"\x0eCredentialsReq\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
