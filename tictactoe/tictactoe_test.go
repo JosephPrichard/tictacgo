@@ -1,6 +1,8 @@
 package tictactoe
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -20,22 +22,24 @@ func TestMoveBoard(t *testing.T) {
 		{board: Board{X, O, X, X, O, O, O, X, O}, tile: Tile{Row: 1, Col: 0}, value: O, expectedErr: ErrOccupied},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		board, turn, err := MoveBoard(test.board, false, test.tile.Row, test.tile.Col, test.value)
 
-		t.Logf("ran test for board\ninput: %v\noutput: %v\nexpected: %v", BoardToString(test.board), BoardToString(board), BoardToString(test.expectedBoard))
+		t.Run(fmt.Sprintf("test-%v", i), func(t *testing.T) {
+			t.Logf("ran test for board\ninput: %v\noutput: %v\nexpected: %v", BoardToString(test.board), BoardToString(board), BoardToString(test.expectedBoard))
 
-		if err != test.expectedErr {
-			t.Fatalf("error while calling MoveBoard, expected err: %v, got: %v", test.expectedErr, err)
-		} else if err == nil {
-			if !reflect.DeepEqual(test.expectedBoard, board) {
-				t.Fatalf("expected board: %v, got: %v", test.expectedBoard, board)
+			if !errors.Is(err, test.expectedErr) {
+				t.Fatalf("error while calling MoveBoard, expected err: %v, got: %v", test.expectedErr, err)
+			} else if err == nil {
+				if !reflect.DeepEqual(test.expectedBoard, board) {
+					t.Fatalf("expected board: %v, got: %v", test.expectedBoard, board)
+				}
+				if !turn {
+					t.Fatalf("expected turn: %v, got: %v", false, turn)
+				}
 			}
-			if !turn {
-				t.Fatalf("expected turn: %v, got: %v", false, turn)
-			}
-		}
-		t.Logf("passed MoveBoard test: move: %v to %d, board: %v", test.tile, test.value, BoardToString(board))
+			t.Logf("passed MoveBoard test: move: %v to %d, board: %v", test.tile, test.value, BoardToString(board))
+		})
 	}
 }
 
@@ -52,14 +56,16 @@ func TestGetResult(t *testing.T) {
 		{board: Board{X, O, X, X, O, O, O, X, O}, expectedResult: Draw},
 	}
 
-	for _, test := range tests {
-		t.Logf("running test for board: %v", BoardToString(test.board))
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("test-%v", i), func(t *testing.T) {
+			t.Logf("running test for board: %v", BoardToString(test.board))
 
-		result := GetResult(test.board)
-		if result != test.expectedResult {
-			t.Fatalf("expected result: %v, got: %v", test.expectedResult, result)
-		} else {
-			t.Logf("passed GetResult test: result: %v, board: %v", result, BoardToString(test.board))
-		}
+			result := GetResult(test.board)
+			if result != test.expectedResult {
+				t.Fatalf("expected result: %v, got: %v", test.expectedResult, result)
+			} else {
+				t.Logf("passed GetResult test: result: %v, board: %v", result, BoardToString(test.board))
+			}
+		})
 	}
 }

@@ -1,13 +1,13 @@
 package main
 
 import (
-	"TicTacGo/database"
+	"TicTacGo/db"
 	"TicTacGo/service"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func MapGetGame(row database.GetGameRow) *service.Game {
+func MapGetGameDefault(row db.GetGameRow) *service.Game {
 	var secondPlayer *service.Player
 	if row.OPlayer.Valid {
 		secondPlayer = &service.Player{
@@ -31,9 +31,34 @@ func MapGetGame(row database.GetGameRow) *service.Game {
 	}
 }
 
-func MapGetGames(gameRows []database.GetGamesRow, stepRows []database.GameStep) []*service.Game {
+func MapGetGameWithUpdt(row db.GetGameRow, updt db.UpdateGameParams) *service.Game {
+	var secondPlayer *service.Player
+	if row.OPlayer.Valid {
+		secondPlayer = &service.Player{
+			Id:       row.OPlayer.Int64,
+			Username: row.OPlayerName.String,
+		}
+	}
+
+	return &service.Game{
+		Id: row.ID,
+		XPlayer: &service.Player{
+			Id:       row.XPlayer,
+			Username: row.XPlayerName.String,
+		},
+		OPlayer:    secondPlayer,
+		BoardState: updt.BoardState,
+		XTurn:      updt.XTurn.Bool,
+		UpdatedOn:  &timestamppb.Timestamp{Seconds: int64(updt.UpdatedOn.Time.Second())},
+		StartedOn:  &timestamppb.Timestamp{Seconds: int64(row.StartedOn.Time.Second())},
+		Result:     updt.Result,
+		Steps:      []*service.Step{},
+	}
+}
+
+func MapGetGames(gameRows []db.GetGamesRow, stepRows []db.GameStep) []*service.Game {
 	stepsMap := make(map[int64][]*service.Step)
-	games := []*service.Game{}
+	var games []*service.Game
 	for _, stepRow := range stepRows {
 		steps, ok := stepsMap[stepRow.GameID]
 		if !ok {
@@ -72,7 +97,7 @@ func MapGetGames(gameRows []database.GetGamesRow, stepRows []database.GameStep) 
 	return games
 }
 
-func MapStep(stepRow database.GameStep) *service.Step {
+func MapStep(stepRow db.GameStep) *service.Step {
 	return &service.Step{
 		GameId:  stepRow.GameID,
 		Ord:     stepRow.Ord,

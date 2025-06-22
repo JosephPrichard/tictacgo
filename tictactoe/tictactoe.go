@@ -56,7 +56,7 @@ func GetIndex(tile Tile) int32 {
 }
 
 func MoveBoard(board Board, turn bool, row int32, col int32, value uint8) (Board, bool, error) {
-	tile := Tile{Row: int32(row), Col: int32(col)}
+	tile := Tile{Row: row, Col: col}
 	if tile.Row < 0 || tile.Col < 0 || tile.Row > 2 && tile.Col > 2 {
 		return board, turn, ErrTile
 	}
