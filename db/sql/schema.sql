@@ -17,8 +17,8 @@ CREATE TABLE games (
     o_player BIGINT REFERENCES player_accounts(id),
     board_state BYTEA NOT NULL,
     x_turn BOOLEAN,
-    updated_on TIMESTAMP NOT NULL,
-    started_on TIMESTAMP NOT NULL,
+    updated_on TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    started_on TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     result INTEGER DEFAULT 0 NOT NULL
 );
 
@@ -30,6 +30,7 @@ CREATE TABLE game_steps (
     board BYTEA NOT NULL,
     x_turn BOOLEAN NOT NULL,
     result INTEGER NOT NULL,
+    made_on TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(game_id, ord)
 );
 

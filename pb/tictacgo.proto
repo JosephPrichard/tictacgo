@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "TicTacGo/service";
+option go_package = "TicTacGo/pb";
 
 package service;
 
@@ -61,8 +61,9 @@ message AuthToken {
 
 message GetGamesReq {
     int32 page = 1;
-    int64 xPlayer = 2;
-    int64 oPlayer = 3;
+    Player xPlayer = 2;
+    Player oPlayer = 3;
+    int32 perPage = 4;
 }
 
 message GetGameReq {

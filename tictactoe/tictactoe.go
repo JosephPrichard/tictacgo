@@ -5,33 +5,32 @@ import (
 	"strings"
 )
 
-const Playing int32 = 0
-const XWon int32 = 1
-const OWon int32 = 2
-const Draw int32 = 3
+const (
+	Playing int32 = 0
+	XWon    int32 = 1
+	OWon    int32 = 2
+	Draw    int32 = 3
+	Forfeit int32 = 4
+)
 
-const E uint8 = 0b00
-const X uint8 = 0b01
-const O uint8 = 0b10
+const (
+	E uint8 = 0b00
+	X uint8 = 0b01
+	O uint8 = 0b10
+)
 
-type Board = [9]uint8
-
-type Tile struct {
-	Row int32
-	Col int32
-}
-
-var topLeft = Tile{Row: 0, Col: 0}
-var top = Tile{Row: 0, Col: 1}
-var topRight = Tile{Row: 0, Col: 2}
-var left = Tile{Row: 1, Col: 0}
-var middle = Tile{Row: 1, Col: 1}
-var right = Tile{Row: 1, Col: 2}
-var bottomLeft = Tile{Row: 2, Col: 0}
-var bottom = Tile{Row: 2, Col: 1}
-var bottomRight = Tile{Row: 2, Col: 2}
-
-var allLines = []Tile{topLeft, top, topRight, left, middle, right, bottomLeft, bottom, bottomRight}
+var (
+	topLeft     = Tile{Row: 0, Col: 0}
+	top         = Tile{Row: 0, Col: 1}
+	topRight    = Tile{Row: 0, Col: 2}
+	left        = Tile{Row: 1, Col: 0}
+	middle      = Tile{Row: 1, Col: 1}
+	right       = Tile{Row: 1, Col: 2}
+	bottomLeft  = Tile{Row: 2, Col: 0}
+	bottom      = Tile{Row: 2, Col: 1}
+	bottomRight = Tile{Row: 2, Col: 2}
+	allLines    = []Tile{topLeft, top, topRight, left, middle, right, bottomLeft, bottom, bottomRight}
+)
 
 var winLines = [][]Tile{
 	{topLeft, top, topRight},          // Row 1
@@ -44,7 +43,14 @@ var winLines = [][]Tile{
 	{topRight, middle, bottomLeft},    // Diagonal /
 }
 
-func NewBoard() (Board, bool) {
+type Board = [9]uint8
+
+type Tile struct {
+	Row int32
+	Col int32
+}
+
+func NewGame() (Board, bool) {
 	return Board{}, true
 }
 

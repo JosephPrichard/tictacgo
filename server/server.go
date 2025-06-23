@@ -2,16 +2,14 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
-	"fmt"
 	"github.com/jackc/pgx/v5"
 	"log"
-	"net"
-	"strings"
 	"time"
 
 	"TicTacGo/db"
-	"TicTacGo/service"
+	"TicTacGo/pb"
 	"TicTacGo/tictactoe"
 
 	"github.com/google/uuid"
@@ -24,48 +22,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const limit int32 = 20
-
-type ServerConfig struct {
-	port       int
-	dbUser     string
-	dbName     string
-	dbPassword string
-	dbPort     int
-}
-
-func StartGrpcServer(config ServerConfig) {
-	ctx := context.Background()
-
-	pool, err := pgxpool.New(ctx, fmt.Sprintf("user=%s dbname=%s password=%s port=%d", config.dbUser, config.dbName, config.dbPassword, config.dbPort))
-	if err != nil {
-		log.Fatalf("failed to connect to database with err: %v", err)
-	}
-	defer pool.Close()
-
-	server := GrpcServer{queries: db.New(pool), pool: pool}
-
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.port))
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-
-	s := grpc.NewServer()
-	service.RegisterTicTacGoServiceServer(s, &server)
-
-	log.Printf("server listening at %v", lis.Addr())
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
-}
-
 type GrpcServer struct {
-	service.UnimplementedTicTacGoServiceServer
+	pb.UnimplementedTicTacGoServiceServer
 	queries *db.Queries
 	pool    *pgxpool.Pool
 }
 
-func (s *GrpcServer) CreateGame(ctx context.Context, in *service.CreateGameReq) (*service.Game, error) {
+func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.Game, error) {
 	if in == nil {
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
@@ -78,12 +41,12 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *service.CreateGameReq) 
 	sessRow, err := s.queries.GetSession(ctx, token)
 	if err != nil {
 		log.Printf("failed to retrieve session: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to retrieve session for token: %v", token)
+		return nil, status.Errorf(codes.PermissionDenied, "failed to retrieve session for token: %v", token)
 	}
 
 	// insert the newly constructed game
 	timeNow := time.Now()
-	board, turn := tictactoe.NewBoard()
+	board, turn := tictactoe.NewGame()
 
 	boardState := make([]byte, len(board))
 	copy(boardState, board[:])
@@ -91,39 +54,37 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *service.CreateGameReq) 
 	params := db.InsertGameParams{
 		XPlayer:    sessRow.ID,
 		BoardState: boardState,
-		XTurn:      pgtype.Bool{Bool: turn, Valid: true},
-		UpdatedOn:  pgtype.Timestamp{Time: timeNow, Valid: true},
-		StartedOn:  pgtype.Timestamp{Time: timeNow, Valid: true},
+		XTurn:      pgtype.Bool{Bool: turn},
+		UpdatedOn:  pgtype.Timestamptz{Time: timeNow},
+		StartedOn:  pgtype.Timestamptz{Time: timeNow},
 	}
 
 	gameId, err := s.queries.InsertGame(ctx, params)
 	if err != nil {
 		log.Printf("failed to insert game: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to insert game for params: %v", params)
+		return nil, status.Errorf(codes.Internal, "failed to insert game for params: %+v", params)
 	}
+	log.Printf("inserted game with params: %+v", params)
 
-	log.Printf("inserted game with params: %v", params)
-
-	// construct the game response for client
-	game := service.Game{
+	game := pb.Game{
 		Id: gameId,
-		XPlayer: &service.Player{
+		XPlayer: &pb.Player{
 			Id:       sessRow.ID,
 			Username: sessRow.Username,
 		},
 		BoardState: params.BoardState,
 		XTurn:      params.XTurn.Bool,
-		UpdatedOn:  &timestamppb.Timestamp{Seconds: int64(timeNow.Second())},
-		StartedOn:  &timestamppb.Timestamp{Seconds: int64(timeNow.Second())},
-		Steps:      []*service.Step{},
+		UpdatedOn:  &timestamppb.Timestamp{Seconds: timeNow.Unix()},
+		StartedOn:  &timestamppb.Timestamp{Seconds: timeNow.Unix()},
+		Steps:      []*pb.Step{},
 	}
 
-	log.Printf("successfully created game: %v, board: %s", game.String(), tictactoe.BoardToString(board))
+	log.Printf("successfully created game: %+v, board: %s", game.String(), tictactoe.BoardToString(board))
 
 	return &game, nil
 }
 
-func (s *GrpcServer) CreatePlayer(ctx context.Context, in *service.CredentialsReq) (*service.Player, error) {
+func (s *GrpcServer) CreatePlayer(ctx context.Context, in *pb.CredentialsReq) (*pb.Player, error) {
 	if in == nil {
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
@@ -139,7 +100,7 @@ func (s *GrpcServer) CreatePlayer(ctx context.Context, in *service.CredentialsRe
 		return nil, status.Errorf(codes.Internal, "failed to insert player for params: %s", params)
 	}
 
-	player := service.Player{
+	player := pb.Player{
 		Id:       row.ID,
 		Username: row.Username,
 	}
@@ -149,24 +110,49 @@ func (s *GrpcServer) CreatePlayer(ctx context.Context, in *service.CredentialsRe
 	return &player, nil
 }
 
-func (s *GrpcServer) GetGame(ctx context.Context, in *service.GetGameReq) (*service.Game, error) {
+func (s *GrpcServer) GetGame(ctx context.Context, in *pb.GetGameReq) (*pb.Game, error) {
 	if in == nil {
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
 
-	row, err := s.queries.GetGame(ctx, in.Id)
-	if err != nil {
-		log.Printf("failed to get game: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to get game for id: %d", in.Id)
+	// fetch game and steps from the database at the same time
+	var eg *errgroup.Group
+	eg, ctx = errgroup.WithContext(ctx)
+
+	var gameRow db.GetGameRow
+	var stepRows []db.GameStep
+
+	eg.Go(func() error {
+		var err error
+		gameRow, err = s.queries.GetGame(ctx, in.Id)
+		if err != nil {
+			log.Printf("failed to get game: %v", err)
+			return status.Errorf(codes.Internal, "failed to get games for id: %v", in.Id)
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		var err error
+		stepRows, err = s.queries.GetGameSteps(ctx, in.Id)
+		if err != nil {
+			log.Printf("failed to get steps: %v", err)
+			return status.Errorf(codes.Internal, "failed to get steps for id: %v", in.Id)
+		}
+		return nil
+	})
+
+	if err := eg.Wait(); err != nil {
+		log.Printf("failed to wait for data with err: %v", err)
+		return nil, err
 	}
 
-	game := MapGetGameDefault(row)
+	game := MapGetGame(gameRow, stepRows)
 	log.Printf("successfully fetched game: %v", game.String())
 
 	return game, nil
 }
 
-func (s *GrpcServer) GetGames(ctx context.Context, in *service.GetGamesReq) (*service.Games, error) {
+func (s *GrpcServer) GetGames(ctx context.Context, in *pb.GetGamesReq) (*pb.Games, error) {
 	if in == nil {
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
@@ -175,24 +161,25 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *service.GetGamesReq) (*se
 	var xPlayerParam pgtype.Int8
 	var oPlayerParam pgtype.Int8
 
-	if in.XPlayer != 0 {
+	if in.XPlayer != nil {
 		xPlayerParam.Valid = true
-		xPlayerParam.Int64 = in.XPlayer
+		xPlayerParam.Int64 = in.XPlayer.Id
 	}
-	if in.OPlayer != 0 {
+	if in.OPlayer != nil {
 		oPlayerParam.Valid = true
-		oPlayerParam.Int64 = in.OPlayer
+		oPlayerParam.Int64 = in.OPlayer.Id
 	}
 
+	limit := in.PerPage
 	params := db.GetGamesParams{
-		ID:      int64(in.Page * limit),
+		ID:      int64((in.Page - 1) * limit),
 		XPlayer: xPlayerParam,
 		OPlayer: oPlayerParam,
-		Limit:   int32(limit),
+		Limit:   limit,
 	}
 
 	gameIds := make([]int64, 0)
-	for i := in.Page * limit; i < (in.Page+1)*limit; i++ {
+	for i := (in.Page - 1) * limit; i < in.Page*limit; i++ {
 		gameIds = append(gameIds, int64(i))
 	}
 
@@ -204,51 +191,46 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *service.GetGamesReq) (*se
 	var stepRows []db.GameStep
 
 	eg.Go(func() error {
+		log.Printf("fetching games for params: %+v", params)
 		var err error
 		gameRows, err = s.queries.GetGames(ctx, params)
 		if err != nil {
 			log.Printf("failed to get games: %v", err)
-			return status.Errorf(codes.Internal, "failed to get games for params: %v", params)
+			return status.Errorf(codes.Internal, "failed to get games for params: %+v", params)
 		}
 		return nil
 	})
 	eg.Go(func() error {
 		var err error
-		stepRows, err = s.queries.GetSteps(ctx, gameIds)
+		log.Printf("fetching game steps for for ids: %+v", gameIds)
+		stepRows, err = s.queries.GetGamesSteps(ctx, gameIds)
 		if err != nil {
 			log.Printf("failed to get steps: %v", err)
-			return status.Errorf(codes.Internal, "failed to get steps for ids: %v", gameIds)
+			return status.Errorf(codes.Internal, "failed to get steps for ids: %+v", gameIds)
 		}
 		return nil
 	})
 
 	if err := eg.Wait(); err != nil {
-		log.Printf("failed to retrieve games and steps for params=%v and ids=%v with err %v", params, gameIds, err)
+		log.Printf("failed to wait for data with err: %v", err)
 		return nil, err
 	}
 
-	// construct a response and a log for each game
 	games := MapGetGames(gameRows, stepRows)
+	log.Printf("retrieved games with for page=%d, firstPlayer=%v, secondPlayer=%v with value: [%s]", in.Page, in.XPlayer, in.OPlayer, GamesString(games))
 
-	var sb strings.Builder
-	for i, game := range games {
-		sb.WriteString(game.String())
-		if i < len(games) {
-			sb.WriteRune(',')
-			sb.WriteRune(' ')
-		}
-	}
-	log.Printf("retrieved games with for page=%d, firstPlayer=%d, secondPlayer=%d with value: [%s]", in.Page, in.XPlayer, in.OPlayer, sb.String())
-
-	return &service.Games{Games: games}, nil
+	return &pb.Games{Games: games}, nil
 }
 
-func (s *GrpcServer) ListenSteps(in *service.GetGameReq, stream grpc.ServerStreamingServer[service.Step]) error {
+func (s *GrpcServer) ListenSteps(in *pb.GetGameReq, stream grpc.ServerStreamingServer[pb.Step]) error {
 	ctx := stream.Context()
 
 	ticker := time.NewTicker(time.Second * 2)
 	for t := range ticker.C {
 		row, err := s.queries.GetLastStep(ctx, in.Id)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
 		if err != nil {
 			log.Printf("failed to get last step: %v", err)
 			return status.Errorf(codes.Internal, "failed to listen steps for game id: %d", in.Id)
@@ -258,7 +240,7 @@ func (s *GrpcServer) ListenSteps(in *service.GetGameReq, stream grpc.ServerStrea
 
 		board := tictactoe.Board{}
 		copy(board[:], step.Board)
-		log.Printf("recieved step on time: %s, with value: %v, board: %v", t, step, tictactoe.BoardToString(board))
+		log.Printf("recieved step at time: %s, with value: %s, board: %v", t, step.String(), tictactoe.BoardToString(board))
 
 		if err = stream.Send(step); err != nil {
 			log.Printf("failed to send step: %v", err)
@@ -272,7 +254,7 @@ func (s *GrpcServer) ListenSteps(in *service.GetGameReq, stream grpc.ServerStrea
 	return nil
 }
 
-func (s *GrpcServer) Login(ctx context.Context, in *service.CredentialsReq) (*service.AuthToken, error) {
+func (s *GrpcServer) Login(ctx context.Context, in *pb.CredentialsReq) (*pb.AuthToken, error) {
 	if in == nil {
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
@@ -283,39 +265,35 @@ func (s *GrpcServer) Login(ctx context.Context, in *service.CredentialsReq) (*se
 		Passwd:   in.Password,
 	}
 
-	rows, verifyErr := s.queries.VerifyPlayer(ctx, verify)
-	if verifyErr != nil {
-		log.Printf("failed to verify player: %v", verifyErr)
-		return nil, status.Errorf(codes.Internal, "failed to verify player for params: %s", verify)
-	}
-
-	if len(rows) == 0 {
+	row, verifyErr := s.queries.VerifyPlayer(ctx, verify)
+	if errors.Is(verifyErr, pgx.ErrNoRows) {
 		log.Printf("failed to authorize the user for username: %v", verify.Username)
 		return nil, status.Errorf(codes.PermissionDenied, "authorization credentials are invalid or missing")
-	} else if len(rows) > 1 {
-		log.Printf("expected VerifyPlayerRows to be less than or equal to 1, was %d", len(rows))
+	}
+	if verifyErr != nil {
+		log.Printf("failed to verify player: %v", verifyErr)
+		return nil, status.Errorf(codes.Internal, "failed to verify player for params: %+v", verify)
 	}
 
 	// insert the session from the logged in player
-	verifiedPlayer := rows[0]
 	token := uuid.New().String()
 	session := db.InsertSessionParams{
 		Token:    token,
-		PlayerID: verifiedPlayer.ID,
+		PlayerID: row.ID,
 	}
 
 	_, sessErr := s.queries.InsertSession(ctx, session)
 	if sessErr != nil {
 		log.Printf("failed to insert session: %v", sessErr)
-		return nil, status.Errorf(codes.Internal, "failed to insert session for params: %v", session)
+		return nil, status.Errorf(codes.Internal, "failed to insert session for params: %+v", session)
 	}
 
-	resp := service.AuthToken{Token: token}
+	resp := pb.AuthToken{Token: token}
 
 	return &resp, nil
 }
 
-func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*service.Game, error) {
+func (s *GrpcServer) MakeMove(ctx context.Context, in *pb.MakeMoveReq) (*pb.Game, error) {
 	if in == nil {
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
@@ -334,7 +312,7 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*se
 		sessRow, err = s.queries.GetSession(ctx, token)
 		if err != nil {
 			log.Printf("failed to get session: %v", err)
-			return status.Errorf(codes.Internal, "failed to get session for params: %s", token)
+			return status.Errorf(codes.PermissionDenied, "failed to get session for params: %s", token)
 		}
 		return nil
 	})
@@ -364,7 +342,7 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*se
 		return nil, status.Errorf(codes.InvalidArgument, "cannot make move on game: %d, it isn't player's turn, expected: %d, received: %d", in.GameId, gameRow.OPlayer.Int64, sessRow.ID)
 	}
 
-	// make state mutations on the tic tac toe board
+	// make state mutations on the tic--tac--toe board
 	var tileValue uint8
 	if gameRow.XTurn.Bool {
 		tileValue = tictactoe.X
@@ -391,14 +369,14 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*se
 		ID:         gameRow.ID,
 		BoardState: boardState,
 		XTurn:      pgtype.Bool{Bool: turn, Valid: true},
-		UpdatedOn:  pgtype.Timestamp{Time: time.Now(), Valid: true},
+		UpdatedOn:  pgtype.Timestamptz(pgtype.Timestamp{Time: time.Now(), Valid: true}),
 		Result:     result,
 	}
 	stepParams := db.InsertStepParams{
 		GameID:  gameRow.ID,
 		Ord:     0,
-		MoveRow: int32(in.Row),
-		MoveCol: int32(in.Col),
+		MoveRow: in.Row,
+		MoveCol: in.Col,
 		Board:   gameRow.BoardState,
 		XTurn:   turn,
 	}
@@ -419,19 +397,18 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*se
 	_, err = qtx.UpdateGame(ctx, updtGameParams)
 	if err != nil {
 		log.Printf("failed to update game: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to update game for id: %d and params: %v", in.GameId, updtGameParams)
+		return nil, status.Errorf(codes.Internal, "failed to update game for id: %d and params: %+v", in.GameId, updtGameParams)
 	}
 	_, err = qtx.InsertStep(ctx, stepParams)
 	if err != nil {
 		log.Printf("failed to update game: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to update game for id: %d and params: %v", in.GameId, updtGameParams)
+		return nil, status.Errorf(codes.Internal, "failed to update game for id: %d and params: %+v", in.GameId, updtGameParams)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to commit UpdateGame and InsertStep transaction")
 	}
 
-	// construct the game response for client
 	game := MapGetGameWithUpdt(gameRow, updtGameParams)
 
 	log.Fatalf("successfully made move on game: %v", game.String())
@@ -439,12 +416,12 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *service.MakeMoveReq) (*se
 	return game, nil
 }
 
-func (s *GrpcServer) WhoAmI(ctx context.Context, in *service.AuthToken) (*service.Player, error) {
+func (s *GrpcServer) WhoAmI(ctx context.Context, in *pb.AuthToken) (*pb.Player, error) {
 	if in == nil {
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
 
-	token := string(in.GetToken())
+	token := in.GetToken()
 
 	log.Printf("called WhoAmI with token: %v", token)
 
@@ -454,7 +431,7 @@ func (s *GrpcServer) WhoAmI(ctx context.Context, in *service.AuthToken) (*servic
 		return nil, status.Errorf(codes.Internal, "failed to get session for token: %s", token)
 	}
 
-	player := service.Player{
+	player := pb.Player{
 		Id:       sessRow.ID,
 		Username: sessRow.Username,
 	}

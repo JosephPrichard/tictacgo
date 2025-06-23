@@ -2,94 +2,102 @@ package main
 
 import (
 	"TicTacGo/db"
-	"TicTacGo/service"
+	"TicTacGo/pb"
+	"strings"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func MapGetGameDefault(row db.GetGameRow) *service.Game {
-	var secondPlayer *service.Player
-	if row.OPlayer.Valid {
-		secondPlayer = &service.Player{
-			Id:       row.OPlayer.Int64,
-			Username: row.OPlayerName.String,
+func MapGetGame(gameRow db.GetGameRow, stepRows []db.GameStep) *pb.Game {
+	var steps []*pb.Step
+	for _, stepRow := range stepRows {
+		steps = append(steps, MapStep(stepRow))
+	}
+
+	var secondPlayer *pb.Player
+	if gameRow.OPlayer.Valid {
+		secondPlayer = &pb.Player{
+			Id:       gameRow.OPlayer.Int64,
+			Username: gameRow.OPlayerName.String,
 		}
 	}
 
-	return &service.Game{
-		Id: row.ID,
-		XPlayer: &service.Player{
-			Id:       row.XPlayer,
-			Username: row.XPlayerName.String,
+	return &pb.Game{
+		Id: gameRow.ID,
+		XPlayer: &pb.Player{
+			Id:       gameRow.XPlayer,
+			Username: gameRow.XPlayerName.String,
 		},
 		OPlayer:    secondPlayer,
-		BoardState: row.BoardState,
-		XTurn:      row.XTurn.Bool,
-		UpdatedOn:  &timestamppb.Timestamp{Seconds: int64(row.UpdatedOn.Time.Second())},
-		StartedOn:  &timestamppb.Timestamp{Seconds: int64(row.StartedOn.Time.Second())},
-		Steps:      []*service.Step{},
+		BoardState: gameRow.BoardState,
+		XTurn:      gameRow.XTurn.Bool,
+		UpdatedOn:  &timestamppb.Timestamp{Seconds: int64(gameRow.UpdatedOn.Time.Second())},
+		StartedOn:  &timestamppb.Timestamp{Seconds: int64(gameRow.StartedOn.Time.Second())},
+		Result:     gameRow.Result,
+		Steps:      steps,
 	}
 }
 
-func MapGetGameWithUpdt(row db.GetGameRow, updt db.UpdateGameParams) *service.Game {
-	var secondPlayer *service.Player
+func MapGetGameWithUpdt(row db.GetGameRow, updt db.UpdateGameParams) *pb.Game {
+	var secondPlayer *pb.Player
 	if row.OPlayer.Valid {
-		secondPlayer = &service.Player{
+		secondPlayer = &pb.Player{
 			Id:       row.OPlayer.Int64,
 			Username: row.OPlayerName.String,
 		}
 	}
 
-	return &service.Game{
+	return &pb.Game{
 		Id: row.ID,
-		XPlayer: &service.Player{
+		XPlayer: &pb.Player{
 			Id:       row.XPlayer,
 			Username: row.XPlayerName.String,
 		},
 		OPlayer:    secondPlayer,
 		BoardState: updt.BoardState,
 		XTurn:      updt.XTurn.Bool,
-		UpdatedOn:  &timestamppb.Timestamp{Seconds: int64(updt.UpdatedOn.Time.Second())},
-		StartedOn:  &timestamppb.Timestamp{Seconds: int64(row.StartedOn.Time.Second())},
+		UpdatedOn:  &timestamppb.Timestamp{Seconds: updt.UpdatedOn.Time.Unix()},
+		StartedOn:  &timestamppb.Timestamp{Seconds: row.StartedOn.Time.Unix()},
 		Result:     updt.Result,
-		Steps:      []*service.Step{},
+		Steps:      []*pb.Step{},
 	}
 }
 
-func MapGetGames(gameRows []db.GetGamesRow, stepRows []db.GameStep) []*service.Game {
-	stepsMap := make(map[int64][]*service.Step)
-	var games []*service.Game
+func MapGetGames(gameRows []db.GetGamesRow, stepRows []db.GameStep) []*pb.Game {
+	stepsMap := make(map[int64][]*pb.Step)
+	var games []*pb.Game
 	for _, stepRow := range stepRows {
 		steps, ok := stepsMap[stepRow.GameID]
 		if !ok {
-			steps = []*service.Step{}
+			steps = []*pb.Step{}
 		}
 		steps = append(steps, MapStep(stepRow))
 		stepsMap[stepRow.GameID] = steps
 	}
 	for _, row := range gameRows {
-		var oPlayer *service.Player
+		var oPlayer *pb.Player
 		if row.OPlayer.Valid {
-			oPlayer = &service.Player{
+			oPlayer = &pb.Player{
 				Id:       row.OPlayer.Int64,
 				Username: row.OPlayerName.String,
 			}
 		}
 		steps, ok := stepsMap[row.ID]
 		if !ok {
-			steps = []*service.Step{}
+			steps = []*pb.Step{}
 		}
-		game := service.Game{
+		game := pb.Game{
 			Id: row.ID,
-			XPlayer: &service.Player{
+			XPlayer: &pb.Player{
 				Id:       row.XPlayer,
 				Username: row.XPlayerName.String,
 			},
 			OPlayer:    oPlayer,
 			BoardState: row.BoardState,
 			XTurn:      row.XTurn.Bool,
-			UpdatedOn:  &timestamppb.Timestamp{Seconds: int64(row.UpdatedOn.Time.Second())},
-			StartedOn:  &timestamppb.Timestamp{Seconds: int64(row.StartedOn.Time.Second())},
+			UpdatedOn:  &timestamppb.Timestamp{Seconds: row.UpdatedOn.Time.Unix()},
+			StartedOn:  &timestamppb.Timestamp{Seconds: row.StartedOn.Time.Unix()},
+			Result:     row.Result,
 			Steps:      steps,
 		}
 		games = append(games, &game)
@@ -97,8 +105,8 @@ func MapGetGames(gameRows []db.GetGamesRow, stepRows []db.GameStep) []*service.G
 	return games
 }
 
-func MapStep(stepRow db.GameStep) *service.Step {
-	return &service.Step{
+func MapStep(stepRow db.GameStep) *pb.Step {
+	return &pb.Step{
 		GameId:  stepRow.GameID,
 		Ord:     stepRow.Ord,
 		MoveRow: stepRow.MoveRow,
@@ -107,4 +115,16 @@ func MapStep(stepRow db.GameStep) *service.Step {
 		XTurn:   stepRow.XTurn,
 		Result:  stepRow.Result,
 	}
+}
+
+func GamesString(games []*pb.Game) string {
+	var sb strings.Builder
+	for i, game := range games {
+		sb.WriteString(game.String())
+		if i < len(games) {
+			sb.WriteRune(',')
+			sb.WriteRune(' ')
+		}
+	}
+	return sb.String()
 }

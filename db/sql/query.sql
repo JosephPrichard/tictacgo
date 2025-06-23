@@ -1,5 +1,5 @@
 -- name: GetGame :one
-SELECT 
+SELECT
     g.id,
     g.x_player,
     g.o_player,
@@ -30,15 +30,13 @@ SELECT
 FROM games g
 LEFT JOIN player_accounts a1 ON a1.id = g.x_player
 LEFT JOIN player_accounts a2 ON a2.id = g.o_player
-WHERE g.id > sqlc.arg('id') AND 
-    (g.x_player = COALESCE(sqlc.narg('xPlayer'), g.x_player) OR 
-        g.o_player = COALESCE(sqlc.narg('oPlayer'), g.o_player)) AND
-    result != 0
+WHERE g.id > sqlc.arg('id')
+    AND g.x_player = COALESCE(sqlc.narg('xPlayer'), g.x_player)
+    AND g.o_player = COALESCE(sqlc.narg('oPlayer'), g.o_player)
 ORDER BY g.id ASC LIMIT sqlc.arg('limit');
 
 -- name: InsertGame :one
-INSERT INTO 
-games (x_player, o_player, board_state, x_turn, updated_on, started_on) 
+INSERT INTO games (x_player, o_player, board_state, x_turn, updated_on, started_on)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id;
 
@@ -47,10 +45,15 @@ UPDATE games
 SET board_state = $1, x_turn = $2, updated_on = $3, result = $4
 WHERE id = $5;
 
--- name: GetSteps :many
+-- name: GetGamesSteps :many
 SELECT * FROM game_steps 
 WHERE game_id = ANY (sqlc.arg('gameIds')::BIGINT[])
 ORDER BY game_id, ord;
+
+-- name: GetGameSteps :many
+SELECT * FROM game_steps
+WHERE game_id = $1
+ORDER BY ord;
 
 -- name: InsertStep :execresult
 INSERT INTO game_steps (game_id, ord, move_row, move_col, board, x_turn) 
@@ -83,5 +86,5 @@ WHERE token = $1;
 -- name: GetPlayer :one
 SELECT id, username FROM player_accounts WHERE id = $1;
 
--- name: VerifyPlayer :many
+-- name: VerifyPlayer :one
 SELECT id, username FROM player_accounts WHERE username = $1 AND passwd = $2;

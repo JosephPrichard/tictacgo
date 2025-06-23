@@ -13,7 +13,7 @@ import (
 )
 
 const getGame = `-- name: GetGame :one
-SELECT 
+SELECT
     g.id,
     g.x_player,
     g.o_player,
@@ -36,8 +36,8 @@ type GetGameRow struct {
 	OPlayer     pgtype.Int8
 	BoardState  []byte
 	XTurn       pgtype.Bool
-	UpdatedOn   pgtype.Timestamp
-	StartedOn   pgtype.Timestamp
+	UpdatedOn   pgtype.Timestamptz
+	StartedOn   pgtype.Timestamptz
 	Result      int32
 	XPlayerName pgtype.Text
 	OPlayerName pgtype.Text
@@ -61,6 +61,41 @@ func (q *Queries) GetGame(ctx context.Context, id int64) (GetGameRow, error) {
 	return i, err
 }
 
+const getGameSteps = `-- name: GetGameSteps :many
+SELECT game_id, ord, move_row, move_col, board, x_turn, result, made_on FROM game_steps
+WHERE game_id = $1
+ORDER BY ord
+`
+
+func (q *Queries) GetGameSteps(ctx context.Context, gameID int64) ([]GameStep, error) {
+	rows, err := q.db.Query(ctx, getGameSteps, gameID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GameStep
+	for rows.Next() {
+		var i GameStep
+		if err := rows.Scan(
+			&i.GameID,
+			&i.Ord,
+			&i.MoveRow,
+			&i.MoveCol,
+			&i.Board,
+			&i.XTurn,
+			&i.Result,
+			&i.MadeOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getGames = `-- name: GetGames :many
 SELECT
     g.id,
@@ -76,10 +111,9 @@ SELECT
 FROM games g
 LEFT JOIN player_accounts a1 ON a1.id = g.x_player
 LEFT JOIN player_accounts a2 ON a2.id = g.o_player
-WHERE g.id > $1 AND 
-    (g.x_player = COALESCE($2, g.x_player) OR 
-        g.o_player = COALESCE($3, g.o_player)) AND
-    result != 0
+WHERE g.id > $1
+    AND g.x_player = COALESCE($2, g.x_player)
+    AND g.o_player = COALESCE($3, g.o_player)
 ORDER BY g.id ASC LIMIT $4
 `
 
@@ -96,8 +130,8 @@ type GetGamesRow struct {
 	OPlayer     pgtype.Int8
 	BoardState  []byte
 	XTurn       pgtype.Bool
-	UpdatedOn   pgtype.Timestamp
-	StartedOn   pgtype.Timestamp
+	UpdatedOn   pgtype.Timestamptz
+	StartedOn   pgtype.Timestamptz
 	Result      int32
 	XPlayerName pgtype.Text
 	OPlayerName pgtype.Text
@@ -139,8 +173,43 @@ func (q *Queries) GetGames(ctx context.Context, arg GetGamesParams) ([]GetGamesR
 	return items, nil
 }
 
+const getGamesSteps = `-- name: GetGamesSteps :many
+SELECT game_id, ord, move_row, move_col, board, x_turn, result, made_on FROM game_steps 
+WHERE game_id = ANY ($1::BIGINT[])
+ORDER BY game_id, ord
+`
+
+func (q *Queries) GetGamesSteps(ctx context.Context, gameids []int64) ([]GameStep, error) {
+	rows, err := q.db.Query(ctx, getGamesSteps, gameids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GameStep
+	for rows.Next() {
+		var i GameStep
+		if err := rows.Scan(
+			&i.GameID,
+			&i.Ord,
+			&i.MoveRow,
+			&i.MoveCol,
+			&i.Board,
+			&i.XTurn,
+			&i.Result,
+			&i.MadeOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLastStep = `-- name: GetLastStep :one
-SELECT game_id, ord, move_row, move_col, board, x_turn, result FROM game_steps
+SELECT game_id, ord, move_row, move_col, board, x_turn, result, made_on FROM game_steps
 WHERE game_id = $1
 ORDER BY ord DESC LIMIT 1
 `
@@ -156,6 +225,7 @@ func (q *Queries) GetLastStep(ctx context.Context, gameID int64) (GameStep, erro
 		&i.Board,
 		&i.XTurn,
 		&i.Result,
+		&i.MadeOn,
 	)
 	return i, err
 }
@@ -230,43 +300,8 @@ func (q *Queries) GetSession(ctx context.Context, token string) (GetSessionRow, 
 	return i, err
 }
 
-const getSteps = `-- name: GetSteps :many
-SELECT game_id, ord, move_row, move_col, board, x_turn, result FROM game_steps 
-WHERE game_id = ANY ($1::BIGINT[])
-ORDER BY game_id, ord
-`
-
-func (q *Queries) GetSteps(ctx context.Context, gameids []int64) ([]GameStep, error) {
-	rows, err := q.db.Query(ctx, getSteps, gameids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GameStep
-	for rows.Next() {
-		var i GameStep
-		if err := rows.Scan(
-			&i.GameID,
-			&i.Ord,
-			&i.MoveRow,
-			&i.MoveCol,
-			&i.Board,
-			&i.XTurn,
-			&i.Result,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const insertGame = `-- name: InsertGame :one
-INSERT INTO 
-games (x_player, o_player, board_state, x_turn, updated_on, started_on) 
+INSERT INTO games (x_player, o_player, board_state, x_turn, updated_on, started_on)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id
 `
@@ -276,8 +311,8 @@ type InsertGameParams struct {
 	OPlayer    pgtype.Int8
 	BoardState []byte
 	XTurn      pgtype.Bool
-	UpdatedOn  pgtype.Timestamp
-	StartedOn  pgtype.Timestamp
+	UpdatedOn  pgtype.Timestamptz
+	StartedOn  pgtype.Timestamptz
 }
 
 func (q *Queries) InsertGame(ctx context.Context, arg InsertGameParams) (int64, error) {
@@ -366,7 +401,7 @@ WHERE id = $5
 type UpdateGameParams struct {
 	BoardState []byte
 	XTurn      pgtype.Bool
-	UpdatedOn  pgtype.Timestamp
+	UpdatedOn  pgtype.Timestamptz
 	Result     int32
 	ID         int64
 }
@@ -381,7 +416,7 @@ func (q *Queries) UpdateGame(ctx context.Context, arg UpdateGameParams) (pgconn.
 	)
 }
 
-const verifyPlayer = `-- name: VerifyPlayer :many
+const verifyPlayer = `-- name: VerifyPlayer :one
 SELECT id, username FROM player_accounts WHERE username = $1 AND passwd = $2
 `
 
@@ -395,22 +430,9 @@ type VerifyPlayerRow struct {
 	Username string
 }
 
-func (q *Queries) VerifyPlayer(ctx context.Context, arg VerifyPlayerParams) ([]VerifyPlayerRow, error) {
-	rows, err := q.db.Query(ctx, verifyPlayer, arg.Username, arg.Passwd)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []VerifyPlayerRow
-	for rows.Next() {
-		var i VerifyPlayerRow
-		if err := rows.Scan(&i.ID, &i.Username); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) VerifyPlayer(ctx context.Context, arg VerifyPlayerParams) (VerifyPlayerRow, error) {
+	row := q.db.QueryRow(ctx, verifyPlayer, arg.Username, arg.Passwd)
+	var i VerifyPlayerRow
+	err := row.Scan(&i.ID, &i.Username)
+	return i, err
 }

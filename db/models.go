@@ -14,8 +14,8 @@ type Game struct {
 	OPlayer    pgtype.Int8
 	BoardState []byte
 	XTurn      pgtype.Bool
-	UpdatedOn  pgtype.Timestamp
-	StartedOn  pgtype.Timestamp
+	UpdatedOn  pgtype.Timestamptz
+	StartedOn  pgtype.Timestamptz
 	Result     int32
 }
 
@@ -27,6 +27,7 @@ type GameStep struct {
 	Board   []byte
 	XTurn   bool
 	Result  int32
+	MadeOn  pgtype.Timestamptz
 }
 
 type PlayerAccount struct {
