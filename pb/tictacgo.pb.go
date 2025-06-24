@@ -79,7 +79,7 @@ type Game struct {
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	XPlayer       *Player                `protobuf:"bytes,2,opt,name=xPlayer,proto3" json:"xPlayer,omitempty"`
 	OPlayer       *Player                `protobuf:"bytes,3,opt,name=oPlayer,proto3" json:"oPlayer,omitempty"`
-	BoardState    []byte                 `protobuf:"bytes,4,opt,name=boardState,proto3" json:"boardState,omitempty"`
+	BoardState    string                 `protobuf:"bytes,4,opt,name=boardState,proto3" json:"boardState,omitempty"`
 	XTurn         bool                   `protobuf:"varint,5,opt,name=xTurn,proto3" json:"xTurn,omitempty"`
 	UpdatedOn     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_on,json=updatedOn,proto3" json:"updated_on,omitempty"`
 	StartedOn     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=started_on,json=startedOn,proto3" json:"started_on,omitempty"`
@@ -140,11 +140,11 @@ func (x *Game) GetOPlayer() *Player {
 	return nil
 }
 
-func (x *Game) GetBoardState() []byte {
+func (x *Game) GetBoardState() string {
 	if x != nil {
 		return x.BoardState
 	}
-	return nil
+	return ""
 }
 
 func (x *Game) GetXTurn() bool {
@@ -232,7 +232,7 @@ type Step struct {
 	Ord           int32                  `protobuf:"varint,2,opt,name=ord,proto3" json:"ord,omitempty"`
 	MoveRow       int32                  `protobuf:"varint,3,opt,name=moveRow,proto3" json:"moveRow,omitempty"`
 	MoveCol       int32                  `protobuf:"varint,4,opt,name=moveCol,proto3" json:"moveCol,omitempty"`
-	Board         []byte                 `protobuf:"bytes,5,opt,name=board,proto3" json:"board,omitempty"`
+	Board         string                 `protobuf:"bytes,5,opt,name=board,proto3" json:"board,omitempty"`
 	XTurn         bool                   `protobuf:"varint,6,opt,name=xTurn,proto3" json:"xTurn,omitempty"`
 	Result        int32                  `protobuf:"varint,7,opt,name=result,proto3" json:"result,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -297,11 +297,11 @@ func (x *Step) GetMoveCol() int32 {
 	return 0
 }
 
-func (x *Step) GetBoard() []byte {
+func (x *Step) GetBoard() string {
 	if x != nil {
 		return x.Board
 	}
-	return nil
+	return ""
 }
 
 func (x *Step) GetXTurn() bool {
@@ -476,7 +476,7 @@ func (x *GetGameReq) GetId() int64 {
 
 type CreateGameReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         *AuthToken             `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -511,16 +511,16 @@ func (*CreateGameReq) Descriptor() ([]byte, []int) {
 	return file_pb_tictacgo_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *CreateGameReq) GetToken() *AuthToken {
+func (x *CreateGameReq) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
-	return nil
+	return ""
 }
 
 type MakeMoveReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         *AuthToken             `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	Row           int32                  `protobuf:"varint,2,opt,name=row,proto3" json:"row,omitempty"`
 	Col           int32                  `protobuf:"varint,3,opt,name=col,proto3" json:"col,omitempty"`
 	GameId        int64                  `protobuf:"varint,4,opt,name=gameId,proto3" json:"gameId,omitempty"`
@@ -558,11 +558,11 @@ func (*MakeMoveReq) Descriptor() ([]byte, []int) {
 	return file_pb_tictacgo_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *MakeMoveReq) GetToken() *AuthToken {
+func (x *MakeMoveReq) GetToken() string {
 	if x != nil {
 		return x.Token
 	}
-	return nil
+	return ""
 }
 
 func (x *MakeMoveReq) GetRow() int32 {
@@ -651,7 +651,7 @@ const file_pb_tictacgo_proto_rawDesc = "" +
 	"\axPlayer\x18\x02 \x01(\v2\x0f.service.PlayerR\axPlayer\x12)\n" +
 	"\aoPlayer\x18\x03 \x01(\v2\x0f.service.PlayerR\aoPlayer\x12\x1e\n" +
 	"\n" +
-	"boardState\x18\x04 \x01(\fR\n" +
+	"boardState\x18\x04 \x01(\tR\n" +
 	"boardState\x12\x14\n" +
 	"\x05xTurn\x18\x05 \x01(\bR\x05xTurn\x129\n" +
 	"\n" +
@@ -667,7 +667,7 @@ const file_pb_tictacgo_proto_rawDesc = "" +
 	"\x03ord\x18\x02 \x01(\x05R\x03ord\x12\x18\n" +
 	"\amoveRow\x18\x03 \x01(\x05R\amoveRow\x12\x18\n" +
 	"\amoveCol\x18\x04 \x01(\x05R\amoveCol\x12\x14\n" +
-	"\x05board\x18\x05 \x01(\fR\x05board\x12\x14\n" +
+	"\x05board\x18\x05 \x01(\tR\x05board\x12\x14\n" +
 	"\x05xTurn\x18\x06 \x01(\bR\x05xTurn\x12\x16\n" +
 	"\x06result\x18\a \x01(\x05R\x06result\"!\n" +
 	"\tAuthToken\x12\x14\n" +
@@ -679,11 +679,11 @@ const file_pb_tictacgo_proto_rawDesc = "" +
 	"\aperPage\x18\x04 \x01(\x05R\aperPage\"\x1c\n" +
 	"\n" +
 	"GetGameReq\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"9\n" +
-	"\rCreateGameReq\x12(\n" +
-	"\x05token\x18\x01 \x01(\v2\x12.service.AuthTokenR\x05token\"s\n" +
-	"\vMakeMoveReq\x12(\n" +
-	"\x05token\x18\x01 \x01(\v2\x12.service.AuthTokenR\x05token\x12\x10\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"%\n" +
+	"\rCreateGameReq\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"_\n" +
+	"\vMakeMoveReq\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12\x10\n" +
 	"\x03row\x18\x02 \x01(\x05R\x03row\x12\x10\n" +
 	"\x03col\x18\x03 \x01(\x05R\x03col\x12\x16\n" +
 	"\x06gameId\x18\x04 \x01(\x03R\x06gameId\"H\n" +
@@ -736,29 +736,27 @@ var file_pb_tictacgo_proto_depIdxs = []int32{
 	1,  // 5: service.Games.games:type_name -> service.Game
 	0,  // 6: service.GetGamesReq.xPlayer:type_name -> service.Player
 	0,  // 7: service.GetGamesReq.oPlayer:type_name -> service.Player
-	4,  // 8: service.CreateGameReq.token:type_name -> service.AuthToken
-	4,  // 9: service.MakeMoveReq.token:type_name -> service.AuthToken
-	5,  // 10: service.TicTacGoService.GetGames:input_type -> service.GetGamesReq
-	6,  // 11: service.TicTacGoService.GetGame:input_type -> service.GetGameReq
-	7,  // 12: service.TicTacGoService.CreateGame:input_type -> service.CreateGameReq
-	8,  // 13: service.TicTacGoService.MakeMove:input_type -> service.MakeMoveReq
-	6,  // 14: service.TicTacGoService.ListenSteps:input_type -> service.GetGameReq
-	9,  // 15: service.TicTacGoService.Login:input_type -> service.CredentialsReq
-	4,  // 16: service.TicTacGoService.WhoAmI:input_type -> service.AuthToken
-	9,  // 17: service.TicTacGoService.CreatePlayer:input_type -> service.CredentialsReq
-	2,  // 18: service.TicTacGoService.GetGames:output_type -> service.Games
-	1,  // 19: service.TicTacGoService.GetGame:output_type -> service.Game
-	1,  // 20: service.TicTacGoService.CreateGame:output_type -> service.Game
-	1,  // 21: service.TicTacGoService.MakeMove:output_type -> service.Game
-	3,  // 22: service.TicTacGoService.ListenSteps:output_type -> service.Step
-	4,  // 23: service.TicTacGoService.Login:output_type -> service.AuthToken
-	0,  // 24: service.TicTacGoService.WhoAmI:output_type -> service.Player
-	0,  // 25: service.TicTacGoService.CreatePlayer:output_type -> service.Player
-	18, // [18:26] is the sub-list for method output_type
-	10, // [10:18] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	5,  // 8: service.TicTacGoService.GetGames:input_type -> service.GetGamesReq
+	6,  // 9: service.TicTacGoService.GetGame:input_type -> service.GetGameReq
+	7,  // 10: service.TicTacGoService.CreateGame:input_type -> service.CreateGameReq
+	8,  // 11: service.TicTacGoService.MakeMove:input_type -> service.MakeMoveReq
+	6,  // 12: service.TicTacGoService.ListenSteps:input_type -> service.GetGameReq
+	9,  // 13: service.TicTacGoService.Login:input_type -> service.CredentialsReq
+	4,  // 14: service.TicTacGoService.WhoAmI:input_type -> service.AuthToken
+	9,  // 15: service.TicTacGoService.CreatePlayer:input_type -> service.CredentialsReq
+	2,  // 16: service.TicTacGoService.GetGames:output_type -> service.Games
+	1,  // 17: service.TicTacGoService.GetGame:output_type -> service.Game
+	1,  // 18: service.TicTacGoService.CreateGame:output_type -> service.Game
+	1,  // 19: service.TicTacGoService.MakeMove:output_type -> service.Game
+	3,  // 20: service.TicTacGoService.ListenSteps:output_type -> service.Step
+	4,  // 21: service.TicTacGoService.Login:output_type -> service.AuthToken
+	0,  // 22: service.TicTacGoService.WhoAmI:output_type -> service.Player
+	0,  // 23: service.TicTacGoService.CreatePlayer:output_type -> service.Player
+	16, // [16:24] is the sub-list for method output_type
+	8,  // [8:16] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_pb_tictacgo_proto_init() }

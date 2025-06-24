@@ -34,7 +34,7 @@ type GetGameRow struct {
 	ID          int64
 	XPlayer     int64
 	OPlayer     pgtype.Int8
-	BoardState  []byte
+	BoardState  string
 	XTurn       pgtype.Bool
 	UpdatedOn   pgtype.Timestamptz
 	StartedOn   pgtype.Timestamptz
@@ -112,8 +112,8 @@ FROM games g
 LEFT JOIN player_accounts a1 ON a1.id = g.x_player
 LEFT JOIN player_accounts a2 ON a2.id = g.o_player
 WHERE g.id > $1
-    AND g.x_player = COALESCE($2, g.x_player)
-    AND g.o_player = COALESCE($3, g.o_player)
+    AND (g.x_player = $2 OR $2 IS NULL)
+    AND (g.o_player = $3 OR $3 IS NULL)
 ORDER BY g.id ASC LIMIT $4
 `
 
@@ -128,7 +128,7 @@ type GetGamesRow struct {
 	ID          int64
 	XPlayer     int64
 	OPlayer     pgtype.Int8
-	BoardState  []byte
+	BoardState  string
 	XTurn       pgtype.Bool
 	UpdatedOn   pgtype.Timestamptz
 	StartedOn   pgtype.Timestamptz
@@ -309,7 +309,7 @@ RETURNING id
 type InsertGameParams struct {
 	XPlayer    int64
 	OPlayer    pgtype.Int8
-	BoardState []byte
+	BoardState string
 	XTurn      pgtype.Bool
 	UpdatedOn  pgtype.Timestamptz
 	StartedOn  pgtype.Timestamptz
@@ -368,27 +368,28 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) (p
 }
 
 const insertStep = `-- name: InsertStep :execresult
-INSERT INTO game_steps (game_id, ord, move_row, move_col, board, x_turn) 
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO game_steps (game_id, move_row, move_col, board, x_turn, result, ord)
+VALUES ($1, $2, $3, $4, $5, $6,
+        COALESCE((SELECT ord FROM game_steps WHERE game_id = $1 ORDER BY ord DESC LIMIT 1), -1) + 1)
 `
 
 type InsertStepParams struct {
 	GameID  int64
-	Ord     int32
 	MoveRow int32
 	MoveCol int32
-	Board   []byte
+	Board   string
 	XTurn   bool
+	Result  int32
 }
 
 func (q *Queries) InsertStep(ctx context.Context, arg InsertStepParams) (pgconn.CommandTag, error) {
 	return q.db.Exec(ctx, insertStep,
 		arg.GameID,
-		arg.Ord,
 		arg.MoveRow,
 		arg.MoveCol,
 		arg.Board,
 		arg.XTurn,
+		arg.Result,
 	)
 }
 
@@ -399,7 +400,7 @@ WHERE id = $5
 `
 
 type UpdateGameParams struct {
-	BoardState []byte
+	BoardState string
 	XTurn      pgtype.Bool
 	UpdatedOn  pgtype.Timestamptz
 	Result     int32

@@ -31,8 +31,8 @@ FROM games g
 LEFT JOIN player_accounts a1 ON a1.id = g.x_player
 LEFT JOIN player_accounts a2 ON a2.id = g.o_player
 WHERE g.id > sqlc.arg('id')
-    AND g.x_player = COALESCE(sqlc.narg('xPlayer'), g.x_player)
-    AND g.o_player = COALESCE(sqlc.narg('oPlayer'), g.o_player)
+    AND (g.x_player = sqlc.narg('xPlayer') OR sqlc.narg('xPlayer') IS NULL)
+    AND (g.o_player = sqlc.narg('oPlayer') OR sqlc.narg('oPlayer') IS NULL)
 ORDER BY g.id ASC LIMIT sqlc.arg('limit');
 
 -- name: InsertGame :one
@@ -56,8 +56,9 @@ WHERE game_id = $1
 ORDER BY ord;
 
 -- name: InsertStep :execresult
-INSERT INTO game_steps (game_id, ord, move_row, move_col, board, x_turn) 
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO game_steps (game_id, move_row, move_col, board, x_turn, result, ord)
+VALUES ($1, $2, $3, $4, $5, $6,
+        COALESCE((SELECT ord FROM game_steps WHERE game_id = $1 ORDER BY ord DESC LIMIT 1), -1) + 1);
 
 -- name: GetLastStep :one
 SELECT * FROM game_steps

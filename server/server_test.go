@@ -35,19 +35,19 @@ var testPbGames = []pb.Game{
 		Id:         1,
 		XPlayer:    &pb.Player{Id: 1, Username: "user1"},
 		OPlayer:    &pb.Player{Id: 2, Username: "user2"},
-		BoardState: []byte{1, 0, 2 /**/, 0, 0, 0 /**/, 0, 0, 0},
+		BoardState: "x_o______",
 		XTurn:      true,
 		Result:     tictactoe.Playing,
 		Steps: []*pb.Step{
-			{GameId: 1, Ord: 0, XTurn: false, Board: []byte{1, 0, 0 /**/, 0, 0, 0 /**/, 0, 0, 0}, Result: tictactoe.Playing, MoveRow: 0, MoveCol: 0},
-			{GameId: 1, Ord: 1, XTurn: true, Board: []byte{1, 0, 2 /**/, 0, 0, 0 /**/, 0, 0, 0}, Result: tictactoe.Playing, MoveRow: 0, MoveCol: 2},
+			{GameId: 1, Ord: 0, XTurn: false, Board: "x________", Result: tictactoe.Playing, MoveRow: 0, MoveCol: 0},
+			{GameId: 1, Ord: 1, XTurn: true, Board: "x_o______", Result: tictactoe.Playing, MoveRow: 0, MoveCol: 2},
 		},
 	},
 	{
 		Id:         2,
 		XPlayer:    &pb.Player{Id: 2, Username: "user2"},
 		OPlayer:    &pb.Player{Id: 1, Username: "user1"},
-		BoardState: make([]byte, 9),
+		BoardState: "_________",
 		XTurn:      true,
 		Result:     tictactoe.Playing,
 		Steps:      []*pb.Step{},
@@ -56,12 +56,20 @@ var testPbGames = []pb.Game{
 		Id:         3,
 		XPlayer:    &pb.Player{Id: 1, Username: "user1"},
 		OPlayer:    &pb.Player{Id: 3, Username: "user3"},
-		BoardState: []byte{0, 0, 0 /**/, 0, 0, 0 /**/, 0, 0, 0},
+		BoardState: "_________",
 		XTurn:      true,
 		Result:     tictactoe.Forfeit,
 		Steps: []*pb.Step{
-			{GameId: 3, Ord: 0, XTurn: true, Board: []byte{0, 0, 0 /**/, 0, 0, 0 /**/, 0, 0, 0}, Result: tictactoe.Forfeit},
+			{GameId: 3, Ord: 0, XTurn: true, Board: "_________", Result: tictactoe.Forfeit},
 		},
+	},
+	{
+		Id:         4,
+		XPlayer:    &pb.Player{Id: 1, Username: "user1"},
+		BoardState: "_________",
+		XTurn:      true,
+		Result:     tictactoe.Playing,
+		Steps:      []*pb.Step{},
 	},
 }
 
@@ -120,7 +128,7 @@ func seedTestData(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
 }
 
 func serve(ctx context.Context, t *testing.T, pool *pgxpool.Pool) (pb.TicTacGoServiceClient, func()) {
-	buffer := 101024 * 1024
+	buffer := 1024 * 1024
 	lis := bufconn.Listen(buffer)
 
 	server := &GrpcServer{queries: db.New(pool), pool: pool}
@@ -185,7 +193,7 @@ func TestServer(t *testing.T) {
 		seedTestData(ctx, t, pool)
 		testLogin(t, client)
 	})
-	t.Run("Play", func(t *testing.T) {
+	t.Run("GetGames", func(t *testing.T) {
 		seedTestData(ctx, t, pool)
 		testGetGames(t, client)
 	})
@@ -193,15 +201,17 @@ func TestServer(t *testing.T) {
 		seedTestData(ctx, t, pool)
 		testListenSteps(t, client)
 	})
+	t.Run("MakeMove", func(t *testing.T) {
+		seedTestData(ctx, t, pool)
+		testMakeMove(t, client)
+	})
 }
 
 func testCreateGame(t *testing.T, client pb.TicTacGoServiceClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
-	in := &pb.CreateGameReq{
-		Token: &pb.AuthToken{Token: "User1Token"},
-	}
+	in := &pb.CreateGameReq{Token: "User1Token"}
 
 	game, err := client.CreateGame(ctx, in)
 	if err != nil {
@@ -209,19 +219,19 @@ func testCreateGame(t *testing.T, client pb.TicTacGoServiceClient) {
 	}
 
 	expectedGame := &pb.Game{
-		Id: 4,
+		Id: 5,
 		XPlayer: &pb.Player{
 			Id:       1,
 			Username: "user1",
 		},
-		BoardState: make([]byte, 9),
+		BoardState: "_________",
 		XTurn:      true,
 		Result:     tictactoe.Playing,
 		Steps:      []*pb.Step{},
 	}
 
 	if !cmp.Equal(game, expectedGame, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on")) {
-		t.Fatalf("produced incorrrect result: expected: %+v, got: %+v", expectedGame, game)
+		t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", expectedGame, game)
 	}
 }
 
@@ -245,7 +255,7 @@ func testCreatePlayer(t *testing.T, client pb.TicTacGoServiceClient) {
 	}
 
 	if !cmp.Equal(player, expectedPlayer, protocmp.Transform()) {
-		t.Fatalf("produced incorrrect result: expected: %+v, got: %+v", expectedPlayer, player)
+		t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", expectedPlayer, player)
 	}
 }
 
@@ -263,7 +273,7 @@ func testGetGame(t *testing.T, client pb.TicTacGoServiceClient) {
 	expectedGame := &testPbGames[0]
 
 	if !cmp.Equal(game, expectedGame, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on")) {
-		t.Fatalf("produced incorrrect result: expected: %+v, got: %+v", expectedGame, game)
+		t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", expectedGame, game)
 	}
 }
 
@@ -291,11 +301,11 @@ func testLogin(t *testing.T, client pb.TicTacGoServiceClient) {
 
 			_, err := client.Login(ctx, in)
 			if test.expCode == 0 && err != nil {
-				t.Fatal("produced an error, expected no error")
+				t.Fatalf("produced an error: %v, expected no error", err)
 			}
 			if test.expCode != 0 {
 				if s, ok := status.FromError(err); !ok || s.Code() != test.expCode {
-					t.Fatalf("produced incorrect error code, ok: %v, expected: %d, got: %d", ok, test.expCode, s.Code())
+					t.Fatalf("produced incorrect error code, ok: %v, \nexpected:\n %d, \ngot:\n %d", ok, test.expCode, s.Code())
 				}
 			}
 		})
@@ -311,7 +321,7 @@ func testGetGames(t *testing.T, client pb.TicTacGoServiceClient) {
 	tests := []Test{
 		{
 			params:   &pb.GetGamesReq{Page: 1, PerPage: 20},
-			expGames: []*pb.Game{&testPbGames[0], &testPbGames[1], &testPbGames[2]},
+			expGames: []*pb.Game{&testPbGames[0], &testPbGames[1], &testPbGames[2], &testPbGames[3]},
 		},
 		{
 			params:   &pb.GetGamesReq{Page: 1, OPlayer: &pb.Player{Id: 3}, PerPage: 20},
@@ -332,7 +342,7 @@ func testGetGames(t *testing.T, client pb.TicTacGoServiceClient) {
 			expectedGames := &pb.Games{Games: test.expGames}
 
 			if !cmp.Equal(games, expectedGames, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on")) {
-				t.Fatalf("produced incorrrect result: expected: %+v, got: %+v", expectedGames, games)
+				t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", expectedGames, games)
 			}
 		})
 	}
@@ -344,17 +354,13 @@ func testListenSteps(t *testing.T, client pb.TicTacGoServiceClient) {
 		expSteps []*pb.Step
 	}
 
-	step1 := &pb.Step{GameId: 1, Ord: 1, XTurn: true, Board: []byte{1, 0, 2 /**/, 0, 0, 0 /**/, 0, 0, 0}, Result: tictactoe.Playing, MoveRow: 0, MoveCol: 2}
-	step2 := &pb.Step{GameId: 3, Ord: 0, XTurn: true, Board: []byte{0, 0, 0 /**/, 0, 0, 0 /**/, 0, 0, 0}, Result: tictactoe.Forfeit}
+	step1 := &pb.Step{GameId: 1, Ord: 1, XTurn: true, Board: "x_o______", Result: tictactoe.Playing, MoveRow: 0, MoveCol: 2}
+	step2 := &pb.Step{GameId: 3, Ord: 0, XTurn: true, Board: "_________", Result: tictactoe.Forfeit}
 	tests := []Test{
 		{
 			id:       1,
 			expSteps: []*pb.Step{step1, step1},
 		},
-		//{
-		//	id:      1,
-		//	expSteps: []*pb.Step{},
-		//},
 		{
 			id:       3,
 			expSteps: []*pb.Step{step2},
@@ -387,7 +393,70 @@ func testListenSteps(t *testing.T, client pb.TicTacGoServiceClient) {
 			}
 
 			if !cmp.Equal(steps, test.expSteps, protocmp.Transform()) {
-				t.Fatalf("produced incorrrect result: expected: %+v, got: %+v", test.expSteps, steps)
+				t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", test.expSteps, steps)
+			}
+		})
+	}
+}
+
+func testMakeMove(t *testing.T, client pb.TicTacGoServiceClient) {
+	type Test struct {
+		in      *pb.MakeMoveReq
+		expGame *pb.Game
+		expCode codes.Code
+	}
+
+	tests := []Test{
+		{
+			in:      &pb.MakeMoveReq{GameId: 1, Row: 0, Col: 0, Token: "User1Token"}, // illegal move
+			expCode: codes.InvalidArgument,
+		},
+		{
+			in:      &pb.MakeMoveReq{GameId: 1, Row: 0, Col: 0, Token: "InvalidToken"}, // invalid token
+			expCode: codes.PermissionDenied,
+		},
+		{
+			in:      &pb.MakeMoveReq{GameId: 2, Row: 0, Col: 0, Token: "User1Token"}, // not player's turn
+			expCode: codes.PermissionDenied,
+		},
+		{
+			in:      &pb.MakeMoveReq{GameId: 3, Row: 0, Col: 0, Token: "User1Token"}, // cannot make move on game not in play
+			expCode: codes.PermissionDenied,
+		},
+		{
+			in:      &pb.MakeMoveReq{GameId: 4, Row: 0, Col: 0, Token: "User1Token"}, // cannot make move on game that is not started
+			expCode: codes.PermissionDenied,
+		},
+		{
+			in: &pb.MakeMoveReq{GameId: 1, Row: 0, Col: 1, Token: "User1Token"}, // success case
+			expGame: &pb.Game{
+				Id:         1,
+				XPlayer:    &pb.Player{Id: 1, Username: "user1"},
+				OPlayer:    &pb.Player{Id: 2, Username: "user2"},
+				BoardState: "xxo______",
+				XTurn:      false,
+				Result:     tictactoe.Playing,
+				Steps:      []*pb.Step{},
+			},
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+			defer cancel()
+
+			game, err := client.MakeMove(ctx, test.in)
+			if test.expCode == 0 && err != nil {
+				t.Fatalf("produced an error: %v, expected no error", err)
+			}
+			if test.expCode != 0 {
+				if s, ok := status.FromError(err); !ok || s.Code() != test.expCode {
+					t.Fatalf("produced incorrect error code, ok: %v, \nexpected:\n %d, \ngot:\n %d", ok, test.expCode, s.Code())
+				}
+			}
+			if test.expCode == 0 && !cmp.Equal(game, test.expGame, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on")) {
+				t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", test.expGame, game)
 			}
 		})
 	}

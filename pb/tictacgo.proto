@@ -33,7 +33,7 @@ message Game {
     int64 id = 1;
     Player xPlayer = 2;
     Player oPlayer = 3;
-    bytes boardState = 4;
+    string boardState = 4;
     bool xTurn = 5;
     google.protobuf.Timestamp updated_on = 6;
     google.protobuf.Timestamp started_on = 7;
@@ -50,7 +50,7 @@ message Step {
     int32 ord = 2;
     int32 moveRow = 3;
     int32 moveCol = 4;
-    bytes board = 5;
+    string board = 5;
     bool xTurn = 6;
     int32 result = 7;
 }
@@ -71,11 +71,11 @@ message GetGameReq {
 }
 
 message CreateGameReq {
-    AuthToken token = 1;
+    string token = 1;
 }
 
 message MakeMoveReq {
-    AuthToken token = 1;
+    string token = 1;
     int32 row = 2;
     int32 col = 3;
     int64 gameId = 4;

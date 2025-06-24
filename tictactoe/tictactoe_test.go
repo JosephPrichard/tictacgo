@@ -26,7 +26,7 @@ func TestMoveBoard(t *testing.T) {
 		board, turn, err := MoveBoard(test.board, false, test.tile.Row, test.tile.Col, test.value)
 
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			t.Logf("ran test for board\ninput: %v\noutput: %v\nexpected: %v", BoardToString(test.board), BoardToString(board), BoardToString(test.expBoard))
+			t.Logf("ran test for board\ninput: %v\noutput: %v\nexpected: %v", FmtBoard(test.board), FmtBoard(board), FmtBoard(test.expBoard))
 
 			if !errors.Is(err, test.expErr) {
 				t.Fatalf("error while calling MoveBoard, expected err: %v, got: %v", test.expErr, err)
@@ -38,7 +38,7 @@ func TestMoveBoard(t *testing.T) {
 					t.Fatalf("expected turn: %v, got: %v", false, turn)
 				}
 			}
-			t.Logf("passed MoveBoard test: move: %v to %d, board: %v", test.tile, test.value, BoardToString(board))
+			t.Logf("passed MoveBoard test: move: %v to %d, board: %v", test.tile, test.value, FmtBoard(board))
 		})
 	}
 }
@@ -58,13 +58,13 @@ func TestGetResult(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("test-%v", i), func(t *testing.T) {
-			t.Logf("running test for board: %v", BoardToString(test.board))
+			t.Logf("running test for board: %v", FmtBoard(test.board))
 
 			result := GetResult(test.board)
 			if result != test.expResult {
 				t.Fatalf("expected result: %v, got: %v", test.expResult, result)
 			} else {
-				t.Logf("passed GetResult test: result: %v, board: %v", result, BoardToString(test.board))
+				t.Logf("passed GetResult test: result: %v, board: %v", result, FmtBoard(test.board))
 			}
 		})
 	}

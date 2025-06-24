@@ -34,26 +34,21 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.
 	}
 
 	// get the session for the provided token
-	token := in.GetToken().Token
+	log.Printf("called CreateGame with token: %v", in.Token)
 
-	log.Printf("called CreateGame with token: %v", token)
-
-	sessRow, err := s.queries.GetSession(ctx, token)
+	sessRow, err := s.queries.GetSession(ctx, in.Token)
 	if err != nil {
 		log.Printf("failed to retrieve session: %v", err)
-		return nil, status.Errorf(codes.PermissionDenied, "failed to retrieve session for token: %v", token)
+		return nil, status.Errorf(codes.PermissionDenied, "failed to retrieve session for token: %v", in.Token)
 	}
 
 	// insert the newly constructed game
 	timeNow := time.Now()
 	board, turn := tictactoe.NewGame()
 
-	boardState := make([]byte, len(board))
-	copy(boardState, board[:])
-
 	params := db.InsertGameParams{
 		XPlayer:    sessRow.ID,
-		BoardState: boardState,
+		BoardState: tictactoe.BoardToString(board),
 		XTurn:      pgtype.Bool{Bool: turn},
 		UpdatedOn:  pgtype.Timestamptz{Time: timeNow},
 		StartedOn:  pgtype.Timestamptz{Time: timeNow},
@@ -79,7 +74,7 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.
 		Steps:      []*pb.Step{},
 	}
 
-	log.Printf("successfully created game: %+v, board: %s", game.String(), tictactoe.BoardToString(board))
+	log.Printf("successfully created game: %+v, board: %s", game.String(), tictactoe.FmtBoard(board))
 
 	return &game, nil
 }
@@ -184,8 +179,7 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *pb.GetGamesReq) (*pb.Game
 	}
 
 	// fetch games and steps from the database at the same time
-	var eg *errgroup.Group
-	eg, ctx = errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 
 	var gameRows []db.GetGamesRow
 	var stepRows []db.GameStep
@@ -193,7 +187,7 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *pb.GetGamesReq) (*pb.Game
 	eg.Go(func() error {
 		log.Printf("fetching games for params: %+v", params)
 		var err error
-		gameRows, err = s.queries.GetGames(ctx, params)
+		gameRows, err = s.queries.GetGames(egCtx, params)
 		if err != nil {
 			log.Printf("failed to get games: %v", err)
 			return status.Errorf(codes.Internal, "failed to get games for params: %+v", params)
@@ -203,7 +197,7 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *pb.GetGamesReq) (*pb.Game
 	eg.Go(func() error {
 		var err error
 		log.Printf("fetching game steps for for ids: %+v", gameIds)
-		stepRows, err = s.queries.GetGamesSteps(ctx, gameIds)
+		stepRows, err = s.queries.GetGamesSteps(egCtx, gameIds)
 		if err != nil {
 			log.Printf("failed to get steps: %v", err)
 			return status.Errorf(codes.Internal, "failed to get steps for ids: %+v", gameIds)
@@ -240,7 +234,7 @@ func (s *GrpcServer) ListenSteps(in *pb.GetGameReq, stream grpc.ServerStreamingS
 
 		board := tictactoe.Board{}
 		copy(board[:], step.Board)
-		log.Printf("recieved step at time: %s, with value: %s, board: %v", t, step.String(), tictactoe.BoardToString(board))
+		log.Printf("recieved step at time: %s, with value: %s, board: %v", t, step.String(), tictactoe.FmtBoard(board))
 
 		if err = stream.Send(step); err != nil {
 			log.Printf("failed to send step: %v", err)
@@ -298,121 +292,65 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *pb.MakeMoveReq) (*pb.Game
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
 
-	token := in.GetToken().Token
-
-	// fetch session and game at the same time
-	var eg *errgroup.Group
-	eg, ctx = errgroup.WithContext(ctx)
-
-	var sessRow db.GetSessionRow
-	var gameRow db.GetGameRow
-
-	eg.Go(func() error {
-		var err error
-		sessRow, err = s.queries.GetSession(ctx, token)
-		if err != nil {
-			log.Printf("failed to get session: %v", err)
-			return status.Errorf(codes.PermissionDenied, "failed to get session for params: %s", token)
-		}
-		return nil
-	})
-	eg.Go(func() error {
-		var err error
-		gameRow, err = s.queries.GetGame(ctx, in.GameId)
-		if err != nil {
-			log.Printf("failed to get game: %v", err)
-			return status.Errorf(codes.Internal, "failed to get game for id: %d", in.GameId)
-		}
-		return nil
-	})
-
-	if err := eg.Wait(); err != nil {
-		log.Printf("failed to retrieve session and game for session token=%s and gameId=%d, with err %v", token, in.GameId, err)
+	sessRow, gameRow, err := s.GetGameAndSession(ctx, in.Token, in.GameId)
+	if err != nil {
 		return nil, err
 	}
 
-	// perform validations for the input based on game state
+	if !gameRow.OPlayer.Valid {
+		log.Printf("cannot make move on game: %d, wait for an opponent to join as 'O'", in.GameId)
+		return nil, status.Errorf(codes.PermissionDenied, "cannot make move on game: %d, wait for an opponent to join as 'O'", in.GameId)
+	}
 	if gameRow.Result != tictactoe.Playing {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot make move on game: %d, game is not in play", in.GameId)
+		log.Printf("cannot make move on game: %d, game is not in play", in.GameId)
+		return nil, status.Errorf(codes.PermissionDenied, "cannot make move on game: %d, game is not in play", in.GameId)
 	}
-	if gameRow.XTurn.Bool && gameRow.XPlayer != sessRow.ID {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot make move on game: %d, it isn't player's turn, expected: %d, received: %d", in.GameId, gameRow.XPlayer, sessRow.ID)
-	}
-	if !gameRow.XTurn.Bool && (gameRow.OPlayer.Int64 != sessRow.ID || !gameRow.OPlayer.Valid) {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot make move on game: %d, it isn't player's turn, expected: %d, received: %d", in.GameId, gameRow.OPlayer.Int64, sessRow.ID)
+	if gameRow.XTurn.Bool && gameRow.XPlayer != sessRow.ID || !gameRow.XTurn.Bool && (gameRow.OPlayer.Int64 != sessRow.ID || !gameRow.OPlayer.Valid) {
+		log.Printf("cannot make move on game: %d, it isn't player's turn, expected: %d, received: %d", in.GameId, gameRow.XPlayer, sessRow.ID)
+		return nil, status.Errorf(codes.PermissionDenied, "cannot make move on game: %d, it isn't player's turn, expected: %d, received: %d", in.GameId, gameRow.XPlayer, sessRow.ID)
 	}
 
-	// make state mutations on the tic--tac--toe board
 	var tileValue uint8
 	if gameRow.XTurn.Bool {
 		tileValue = tictactoe.X
 	} else {
 		tileValue = tictactoe.O
 	}
-
-	board := tictactoe.Board{}
-	copy(board[:], gameRow.BoardState)
-
+	board, err := tictactoe.BoardFromString(gameRow.BoardState)
+	if err != nil {
+		log.Printf("error converting board from string: %v", err)
+		return nil, status.Error(codes.Internal, "error converting board from string")
+	}
 	board, turn, err := tictactoe.MoveBoard(board, gameRow.XTurn.Bool, in.Row, in.Col, tileValue)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "cannot make move on game: %d, %s", in.GameId, err.Error())
+		log.Printf("cannot make move on game: %d, %s", in.GameId, err.Error())
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	log.Printf("made move on game: %d, board: %v", in.GameId, tictactoe.BoardToString(board))
-
 	result := tictactoe.GetResult(board)
 
-	boardState := make([]byte, len(board))
-	copy(boardState, board[:])
+	log.Printf("made move on game: %d, board: %v", in.GameId, tictactoe.FmtBoard(board))
 
-	// begin transaction to persist new game state and step to the database
 	updtGameParams := db.UpdateGameParams{
 		ID:         gameRow.ID,
-		BoardState: boardState,
+		BoardState: tictactoe.BoardToString(board),
 		XTurn:      pgtype.Bool{Bool: turn, Valid: true},
 		UpdatedOn:  pgtype.Timestamptz(pgtype.Timestamp{Time: time.Now(), Valid: true}),
 		Result:     result,
 	}
-	stepParams := db.InsertStepParams{
+	instStepParams := db.InsertStepParams{
 		GameID:  gameRow.ID,
-		Ord:     0,
 		MoveRow: in.Row,
 		MoveCol: in.Col,
 		Board:   gameRow.BoardState,
 		XTurn:   turn,
+		Result:  result,
 	}
-
-	tx, err := s.pool.Begin(ctx)
+	err = s.UpdateGameTransaction(ctx, in.GameId, updtGameParams, instStepParams)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to open UpdateGame and InsertStep transaction")
-	}
-
-	defer func(tx pgx.Tx, ctx context.Context) {
-		err := tx.Rollback(ctx)
-		if err != nil {
-			log.Printf("failed to rollback UpdateGame and InsertStep transaction: %v", err)
-		}
-	}(tx, ctx)
-	qtx := s.queries.WithTx(tx)
-
-	_, err = qtx.UpdateGame(ctx, updtGameParams)
-	if err != nil {
-		log.Printf("failed to update game: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to update game for id: %d and params: %+v", in.GameId, updtGameParams)
-	}
-	_, err = qtx.InsertStep(ctx, stepParams)
-	if err != nil {
-		log.Printf("failed to update game: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to update game for id: %d and params: %+v", in.GameId, updtGameParams)
-	}
-
-	if err = tx.Commit(ctx); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to commit UpdateGame and InsertStep transaction")
+		return nil, err
 	}
 
 	game := MapGetGameWithUpdt(gameRow, updtGameParams)
-
-	log.Fatalf("successfully made move on game: %v", game.String())
-
 	return game, nil
 }
 

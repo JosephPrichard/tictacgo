@@ -2,7 +2,10 @@ package tictactoe
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -104,26 +107,29 @@ func GetResult(board Board) int32 {
 	return Playing
 }
 
-func RuneToTile(tile uint8) rune {
-	switch tile {
-	case E:
-		return ' '
-	case X:
-		return 'X'
-	case O:
-		return 'O'
-	default:
-		return '?'
-	}
-}
-
-func BoardToString(board Board) string {
+func FmtBoard(board Board) string {
 	var sb strings.Builder
 	sb.WriteRune('\n')
 	for i := range 9 {
 		tile := board[i]
-		runeTile := RuneToTile(tile)
-		sb.WriteRune(runeTile)
+
+		var c rune
+		switch tile {
+		case E:
+			c = ' '
+			break
+		case X:
+			c = 'X'
+			break
+		case O:
+			c = 'O'
+			break
+		default:
+			c = '?'
+			break
+		}
+		sb.WriteRune(c)
+
 		if (i+1)%3 == 0 && i != 8 {
 			sb.WriteRune('\n')
 			sb.WriteRune('-')
@@ -138,4 +144,53 @@ func BoardToString(board Board) string {
 	}
 	sb.WriteRune('\n')
 	return sb.String()
+}
+
+func BoardToString(board Board) string {
+	var sb strings.Builder
+	for _, tile := range board {
+		var c rune
+		switch tile {
+		case E:
+			c = '_'
+			break
+		case X:
+			c = 'x'
+			break
+		case O:
+			c = 'o'
+			break
+		default:
+			log.Printf("attempting to convert invalid board to string: %v", board)
+			c = '?'
+			break
+		}
+		sb.WriteRune(c)
+	}
+	return sb.String()
+}
+
+func BoardFromString(s string) (Board, error) {
+	var board Board
+	for i, c := range s {
+		if i >= len(board) {
+			return Board{}, fmt.Errorf("attempting to parse invalid board from string: %s, length exceeds maximum: %d", s, len(board))
+		}
+		var tile uint8
+		switch unicode.ToLower(c) {
+		case '_':
+			tile = E
+			break
+		case 'x':
+			tile = X
+			break
+		case 'o':
+			tile = O
+			break
+		default:
+			return Board{}, fmt.Errorf("attempting to parse invalid board from string: %s, invalid symbol: %v at %d", s, c, i)
+		}
+		board[i] = tile
+	}
+	return board, nil
 }
