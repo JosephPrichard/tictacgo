@@ -49,7 +49,7 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.
 	params := db.InsertGameParams{
 		XPlayer:    sessRow.ID,
 		BoardState: tictactoe.BoardToString(board),
-		XTurn:      pgtype.Bool{Bool: turn},
+		XTurn:      pgtype.Bool{Bool: turn, Valid: true},
 		UpdatedOn:  pgtype.Timestamptz{Time: timeNow},
 		StartedOn:  pgtype.Timestamptz{Time: timeNow},
 	}
@@ -230,10 +230,13 @@ func (s *GrpcServer) ListenSteps(in *pb.GetGameReq, stream grpc.ServerStreamingS
 			return status.Errorf(codes.Internal, "failed to listen steps for game id: %d", in.Id)
 		}
 
-		step := MapStep(row)
+		board, err := tictactoe.BoardFromString(row.Board)
+		if err != nil {
+			log.Printf("error converting board from string: %v", err)
+			return status.Error(codes.Internal, "error converting board from string")
+		}
 
-		board := tictactoe.Board{}
-		copy(board[:], step.Board)
+		step := MapStep(row)
 		log.Printf("recieved step at time: %s, with value: %s, board: %v", t, step.String(), tictactoe.FmtBoard(board))
 
 		if err = stream.Send(step); err != nil {

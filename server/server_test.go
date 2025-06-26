@@ -7,15 +7,16 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/google/go-cmp/cmp"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/testing/protocmp"
 	"io"
 	"net"
-
-	"google.golang.org/grpc/credentials/insecure"
 	"testing"
 	"time"
 
@@ -29,6 +30,8 @@ var testDbUser = "postgres"
 var testDbName = "tictacgo"
 var testDbPass = "password123"
 var testDbPort = 9876
+
+// test data and expected values used for arguments and asserts
 
 var testPbGames = []pb.Game{
 	{
@@ -72,6 +75,8 @@ var testPbGames = []pb.Game{
 		Steps:      []*pb.Step{},
 	},
 }
+
+// setup and teardown of external dependencies
 
 func createEmbeddedDb(t *testing.T) func() {
 	config := embeddedpostgres.DefaultConfig().
@@ -162,6 +167,8 @@ func serve(ctx context.Context, t *testing.T, pool *pgxpool.Pool) (pb.TicTacGoSe
 	return client, closer
 }
 
+// begin component/functional tests
+
 func TestServer(t *testing.T) {
 	ctx := context.Background()
 
@@ -174,16 +181,18 @@ func TestServer(t *testing.T) {
 	}
 	defer pool.Close()
 
+	queries := db.New(pool)
+
 	client, closer := serve(ctx, t, pool)
 	defer closer()
 
 	t.Run("CreateGame", func(t *testing.T) {
 		seedTestData(ctx, t, pool)
-		testCreateGame(t, client)
+		testCreateGame(t, client, queries)
 	})
 	t.Run("CreatePlayer", func(t *testing.T) {
 		seedTestData(ctx, t, pool)
-		testCreatePlayer(t, client)
+		testCreatePlayer(t, client, queries)
 	})
 	t.Run("GetGame", func(t *testing.T) {
 		seedTestData(ctx, t, pool)
@@ -207,7 +216,7 @@ func TestServer(t *testing.T) {
 	})
 }
 
-func testCreateGame(t *testing.T, client pb.TicTacGoServiceClient) {
+func testCreateGame(t *testing.T, client pb.TicTacGoServiceClient, queries *db.Queries) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
@@ -229,13 +238,25 @@ func testCreateGame(t *testing.T, client pb.TicTacGoServiceClient) {
 		Result:     tictactoe.Playing,
 		Steps:      []*pb.Step{},
 	}
+	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
+	assert.Equal(t, "", diff)
 
-	if !cmp.Equal(game, expectedGame, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on")) {
-		t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", expectedGame, game)
+	dbGame, err := queries.GetGame(ctx, 5)
+	if err != nil {
+		t.Fatalf("failed to get game for assert: %v", err)
 	}
+
+	assert.Equal(t, int64(5), dbGame.ID)
+	assert.Equal(t, int64(1), dbGame.XPlayer)
+	assert.Equal(t, pgtype.Int8{}, dbGame.OPlayer)
+	assert.Equal(t, "_________", dbGame.BoardState)
+	assert.Equal(t, pgtype.Bool{Bool: true, Valid: true}, dbGame.XTurn)
+	assert.Equal(t, tictactoe.Playing, dbGame.Result)
+	assert.Equal(t, pgtype.Text{String: "user1", Valid: true}, dbGame.XPlayerName)
+	assert.Equal(t, pgtype.Text{String: "", Valid: false}, dbGame.OPlayerName)
 }
 
-func testCreatePlayer(t *testing.T, client pb.TicTacGoServiceClient) {
+func testCreatePlayer(t *testing.T, client pb.TicTacGoServiceClient, queries *db.Queries) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
@@ -249,14 +270,16 @@ func testCreatePlayer(t *testing.T, client pb.TicTacGoServiceClient) {
 		t.Fatalf("failed to create player: %v", err)
 	}
 
-	expectedPlayer := &pb.Player{
-		Id:       4,
-		Username: "user4",
+	assert.Equal(t, int64(4), player.Id)
+	assert.Equal(t, "user4", player.Username)
+
+	dbPlayer, err := queries.GetPlayer(ctx, 4)
+	if err != nil {
+		t.Fatalf("failed to get game for assert: %v", err)
 	}
 
-	if !cmp.Equal(player, expectedPlayer, protocmp.Transform()) {
-		t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", expectedPlayer, player)
-	}
+	assert.Equal(t, int64(4), dbPlayer.ID)
+	assert.Equal(t, "user4", dbPlayer.Username)
 }
 
 func testGetGame(t *testing.T, client pb.TicTacGoServiceClient) {
@@ -272,9 +295,8 @@ func testGetGame(t *testing.T, client pb.TicTacGoServiceClient) {
 
 	expectedGame := &testPbGames[0]
 
-	if !cmp.Equal(game, expectedGame, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on")) {
-		t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", expectedGame, game)
-	}
+	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
+	assert.Equal(t, "", diff)
 }
 
 func testLogin(t *testing.T, client pb.TicTacGoServiceClient) {
@@ -300,13 +322,13 @@ func testLogin(t *testing.T, client pb.TicTacGoServiceClient) {
 			}
 
 			_, err := client.Login(ctx, in)
-			if test.expCode == 0 && err != nil {
-				t.Fatalf("produced an error: %v, expected no error", err)
+			if test.expCode == 0 {
+				assert.Nil(t, err)
 			}
 			if test.expCode != 0 {
-				if s, ok := status.FromError(err); !ok || s.Code() != test.expCode {
-					t.Fatalf("produced incorrect error code, ok: %v, \nexpected:\n %d, \ngot:\n %d", ok, test.expCode, s.Code())
-				}
+				s, ok := status.FromError(err)
+				assert.True(t, ok)
+				assert.Equal(t, test.expCode, s.Code())
 			}
 		})
 	}
@@ -341,9 +363,8 @@ func testGetGames(t *testing.T, client pb.TicTacGoServiceClient) {
 
 			expectedGames := &pb.Games{Games: test.expGames}
 
-			if !cmp.Equal(games, expectedGames, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on")) {
-				t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", expectedGames, games)
-			}
+			diff := cmp.Diff(expectedGames, games, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
+			assert.Equal(t, "", diff)
 		})
 	}
 }
@@ -392,9 +413,8 @@ func testListenSteps(t *testing.T, client pb.TicTacGoServiceClient) {
 				steps = append(steps, step)
 			}
 
-			if !cmp.Equal(steps, test.expSteps, protocmp.Transform()) {
-				t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", test.expSteps, steps)
-			}
+			diff := cmp.Diff(test.expSteps, steps, protocmp.Transform())
+			assert.Equal(t, "", diff)
 		})
 	}
 }
@@ -447,16 +467,16 @@ func testMakeMove(t *testing.T, client pb.TicTacGoServiceClient) {
 			defer cancel()
 
 			game, err := client.MakeMove(ctx, test.in)
-			if test.expCode == 0 && err != nil {
-				t.Fatalf("produced an error: %v, expected no error", err)
+			if test.expCode == 0 {
+				assert.Nil(t, err)
+
+				diff := cmp.Diff(test.expGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
+				assert.Equal(t, "", diff)
 			}
 			if test.expCode != 0 {
-				if s, ok := status.FromError(err); !ok || s.Code() != test.expCode {
-					t.Fatalf("produced incorrect error code, ok: %v, \nexpected:\n %d, \ngot:\n %d", ok, test.expCode, s.Code())
-				}
-			}
-			if test.expCode == 0 && !cmp.Equal(game, test.expGame, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on")) {
-				t.Fatalf("produced incorrrect result: \nexpected:\n %+v, \ngot:\n %+v", test.expGame, game)
+				s, ok := status.FromError(err)
+				assert.True(t, ok)
+				assert.Equal(t, test.expCode, s.Code())
 			}
 		})
 	}

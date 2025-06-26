@@ -1,9 +1,8 @@
 package tictactoe
 
 import (
-	"errors"
 	"fmt"
-	"reflect"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -28,16 +27,12 @@ func TestMoveBoard(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			t.Logf("ran test for board\ninput: %v\noutput: %v\nexpected: %v", FmtBoard(test.board), FmtBoard(board), FmtBoard(test.expBoard))
 
-			if !errors.Is(err, test.expErr) {
-				t.Fatalf("error while calling MoveBoard, expected err: %v, got: %v", test.expErr, err)
-			} else if err == nil {
-				if !reflect.DeepEqual(test.expBoard, board) {
-					t.Fatalf("expected board: %v, got: %v", test.expBoard, board)
-				}
-				if !turn {
-					t.Fatalf("expected turn: %v, got: %v", false, turn)
-				}
+			assert.Equal(t, test.expErr, err)
+			if err == nil {
+				assert.Equal(t, test.expBoard, board)
+				assert.True(t, turn)
 			}
+
 			t.Logf("passed MoveBoard test: move: %v to %d, board: %v", test.tile, test.value, FmtBoard(board))
 		})
 	}
@@ -61,11 +56,7 @@ func TestGetResult(t *testing.T) {
 			t.Logf("running test for board: %v", FmtBoard(test.board))
 
 			result := GetResult(test.board)
-			if result != test.expResult {
-				t.Fatalf("expected result: %v, got: %v", test.expResult, result)
-			} else {
-				t.Logf("passed GetResult test: result: %v, board: %v", result, FmtBoard(test.board))
-			}
+			assert.Equal(t, test.expResult, result)
 		})
 	}
 }
