@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"fmt"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -30,8 +31,6 @@ var testDbUser = "postgres"
 var testDbName = "tictacgo"
 var testDbPass = "password123"
 var testDbPort = 9876
-
-// test data and expected values used for arguments and asserts
 
 var testPbGames = []pb.Game{
 	{
@@ -76,7 +75,13 @@ var testPbGames = []pb.Game{
 	},
 }
 
-// setup and teardown of external dependencies
+type TextCtx struct {
+	ctx     context.Context
+	t       *testing.T
+	pool    *pgxpool.Pool
+	client  pb.TicTacGoServiceClient
+	queries *db.Queries
+}
 
 func createEmbeddedDb(t *testing.T) func() {
 	config := embeddedpostgres.DefaultConfig().
@@ -107,29 +112,29 @@ func createEmbeddedDb(t *testing.T) func() {
 	return closer
 }
 
-func seedTestData(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
-	conn, err := pool.Acquire(ctx)
+func seedTestData(c TextCtx) {
+	conn, err := c.pool.Acquire(c.ctx)
 	if err != nil {
-		t.Fatalf("failed to acquire a db conn with err: %v", err)
+		c.t.Fatalf("failed to acquire a db conn with err: %v", err)
 	}
 	defer conn.Release()
 
-	_, err = conn.Exec(ctx, "DROP TABLE IF EXISTS player_accounts, player_sessions, games, game_steps;")
+	_, err = conn.Exec(c.ctx, "DROP TABLE IF EXISTS player_accounts, player_sessions, games, game_steps;")
 	if err != nil {
-		t.Fatalf("failed to drop schema with err: %v", err)
+		c.t.Fatalf("failed to drop schema with err: %v", err)
 	}
 
-	_, err = conn.Exec(ctx, db.CreateSchema)
+	_, err = conn.Exec(c.ctx, db.CreateSchema)
 	if err != nil {
-		t.Fatalf("failed to execute CreateSchema with err: %v", err)
+		c.t.Fatalf("failed to execute CreateSchema with err: %v", err)
 	}
 
-	_, err = conn.Exec(ctx, db.SeedTestData)
+	_, err = conn.Exec(c.ctx, db.SeedTestData)
 	if err != nil {
-		t.Fatalf("failed to execute SeedTestData with err: %v", err)
+		c.t.Fatalf("failed to execute SeedTestData with err: %v", err)
 	}
 
-	t.Logf("successfully created the database schema")
+	c.t.Logf("successfully created the database schema")
 }
 
 func serve(ctx context.Context, t *testing.T, pool *pgxpool.Pool) (pb.TicTacGoServiceClient, func()) {
@@ -167,8 +172,6 @@ func serve(ctx context.Context, t *testing.T, pool *pgxpool.Pool) (pb.TicTacGoSe
 	return client, closer
 }
 
-// begin component/functional tests
-
 func TestServer(t *testing.T) {
 	ctx := context.Background()
 
@@ -186,45 +189,48 @@ func TestServer(t *testing.T) {
 	client, closer := serve(ctx, t, pool)
 	defer closer()
 
+	c := TextCtx{
+		ctx:     ctx,
+		t:       t,
+		pool:    pool,
+		client:  client,
+		queries: queries,
+	}
+
 	t.Run("CreateGame", func(t *testing.T) {
-		seedTestData(ctx, t, pool)
-		testCreateGame(t, client, queries)
+		testCreateGame(c)
 	})
 	t.Run("CreatePlayer", func(t *testing.T) {
-		seedTestData(ctx, t, pool)
-		testCreatePlayer(t, client, queries)
+		testCreatePlayer(c)
 	})
 	t.Run("GetGame", func(t *testing.T) {
-		seedTestData(ctx, t, pool)
-		testGetGame(t, client)
+		testGetGame(c)
 	})
 	t.Run("Login", func(t *testing.T) {
-		seedTestData(ctx, t, pool)
-		testLogin(t, client)
+		testLogin(c)
 	})
 	t.Run("GetGames", func(t *testing.T) {
-		seedTestData(ctx, t, pool)
-		testGetGames(t, client)
+		testGetGames(c)
 	})
 	t.Run("ListenSteps", func(t *testing.T) {
-		seedTestData(ctx, t, pool)
-		testListenSteps(t, client)
+		testListenSteps(c)
 	})
 	t.Run("MakeMove", func(t *testing.T) {
-		seedTestData(ctx, t, pool)
-		testMakeMove(t, client)
+		testMakeMove(c)
 	})
 }
 
-func testCreateGame(t *testing.T, client pb.TicTacGoServiceClient, queries *db.Queries) {
+func testCreateGame(c TextCtx) {
+	seedTestData(c)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
 	in := &pb.CreateGameReq{Token: "User1Token"}
 
-	game, err := client.CreateGame(ctx, in)
+	game, err := c.client.CreateGame(ctx, in)
 	if err != nil {
-		t.Fatalf("failed to create game: %v", err)
+		c.t.Fatalf("failed to create game: %v", err)
 	}
 
 	expectedGame := &pb.Game{
@@ -238,25 +244,32 @@ func testCreateGame(t *testing.T, client pb.TicTacGoServiceClient, queries *db.Q
 		Result:     tictactoe.Playing,
 		Steps:      []*pb.Step{},
 	}
-	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
-	assert.Equal(t, "", diff)
+	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(expectedGame, "updated_on", "started_on"))
+	assert.Equal(c.t, "", diff)
 
-	dbGame, err := queries.GetGame(ctx, 5)
+	dbGame, err := c.queries.GetGame(ctx, 5)
 	if err != nil {
-		t.Fatalf("failed to get game for assert: %v", err)
+		c.t.Fatalf("failed to get game for assert: %v", err)
 	}
 
-	assert.Equal(t, int64(5), dbGame.ID)
-	assert.Equal(t, int64(1), dbGame.XPlayer)
-	assert.Equal(t, pgtype.Int8{}, dbGame.OPlayer)
-	assert.Equal(t, "_________", dbGame.BoardState)
-	assert.Equal(t, pgtype.Bool{Bool: true, Valid: true}, dbGame.XTurn)
-	assert.Equal(t, tictactoe.Playing, dbGame.Result)
-	assert.Equal(t, pgtype.Text{String: "user1", Valid: true}, dbGame.XPlayerName)
-	assert.Equal(t, pgtype.Text{String: "", Valid: false}, dbGame.OPlayerName)
+	expectedDbGame := db.GetGameRow{
+		ID:          5,
+		XPlayer:     1,
+		OPlayer:     pgtype.Int8{},
+		BoardState:  "_________",
+		XTurn:       pgtype.Bool{Bool: true, Valid: true},
+		Result:      tictactoe.Playing,
+		XPlayerName: pgtype.Text{String: "user1", Valid: true},
+		OPlayerName: pgtype.Text{String: "", Valid: false},
+	}
+
+	diff = cmp.Diff(expectedDbGame, dbGame, cmpopts.IgnoreFields(dbGame, "UpdatedOn", "StartedOn"))
+	assert.Equal(c.t, "", diff)
 }
 
-func testCreatePlayer(t *testing.T, client pb.TicTacGoServiceClient, queries *db.Queries) {
+func testCreatePlayer(c TextCtx) {
+	seedTestData(c)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
@@ -265,41 +278,45 @@ func testCreatePlayer(t *testing.T, client pb.TicTacGoServiceClient, queries *db
 		Password: "password4",
 	}
 
-	player, err := client.CreatePlayer(ctx, in)
+	player, err := c.client.CreatePlayer(ctx, in)
 	if err != nil {
-		t.Fatalf("failed to create player: %v", err)
+		c.t.Fatalf("failed to create player: %v", err)
 	}
 
-	assert.Equal(t, int64(4), player.Id)
-	assert.Equal(t, "user4", player.Username)
+	assert.Equal(c.t, int64(4), player.Id)
+	assert.Equal(c.t, "user4", player.Username)
 
-	dbPlayer, err := queries.GetPlayer(ctx, 4)
+	dbPlayer, err := c.queries.GetPlayer(ctx, 4)
 	if err != nil {
-		t.Fatalf("failed to get game for assert: %v", err)
+		c.t.Fatalf("failed to get game for assert: %v", err)
 	}
 
-	assert.Equal(t, int64(4), dbPlayer.ID)
-	assert.Equal(t, "user4", dbPlayer.Username)
+	assert.Equal(c.t, int64(4), dbPlayer.ID)
+	assert.Equal(c.t, "user4", dbPlayer.Username)
 }
 
-func testGetGame(t *testing.T, client pb.TicTacGoServiceClient) {
+func testGetGame(c TextCtx) {
+	seedTestData(c)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
 	in := &pb.GetGameReq{Id: 1}
 
-	game, err := client.GetGame(ctx, in)
+	game, err := c.client.GetGame(ctx, in)
 	if err != nil {
-		t.Fatalf("failed to get game: %v", err)
+		c.t.Fatalf("failed to get game: %v", err)
 	}
 
 	expectedGame := &testPbGames[0]
 
 	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
-	assert.Equal(t, "", diff)
+	assert.Equal(c.t, "", diff)
 }
 
-func testLogin(t *testing.T, client pb.TicTacGoServiceClient) {
+func testLogin(c TextCtx) {
+	seedTestData(c)
+
 	type Test struct {
 		username string
 		password string
@@ -312,7 +329,7 @@ func testLogin(t *testing.T, client pb.TicTacGoServiceClient) {
 	}
 
 	for i, test := range tests {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		c.t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 
@@ -321,7 +338,7 @@ func testLogin(t *testing.T, client pb.TicTacGoServiceClient) {
 				Password: test.password,
 			}
 
-			_, err := client.Login(ctx, in)
+			_, err := c.client.Login(ctx, in)
 			if test.expCode == 0 {
 				assert.Nil(t, err)
 			}
@@ -334,7 +351,9 @@ func testLogin(t *testing.T, client pb.TicTacGoServiceClient) {
 	}
 }
 
-func testGetGames(t *testing.T, client pb.TicTacGoServiceClient) {
+func testGetGames(c TextCtx) {
+	seedTestData(c)
+
 	type Test struct {
 		params   *pb.GetGamesReq
 		expGames []*pb.Game
@@ -352,11 +371,11 @@ func testGetGames(t *testing.T, client pb.TicTacGoServiceClient) {
 	}
 
 	for i, test := range tests {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		c.t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 
-			games, err := client.GetGames(ctx, test.params)
+			games, err := c.client.GetGames(ctx, test.params)
 			if err != nil {
 				t.Fatalf("failed to get games: %v", err)
 			}
@@ -369,7 +388,9 @@ func testGetGames(t *testing.T, client pb.TicTacGoServiceClient) {
 	}
 }
 
-func testListenSteps(t *testing.T, client pb.TicTacGoServiceClient) {
+func testListenSteps(c TextCtx) {
+	seedTestData(c)
+
 	type Test struct {
 		id       int64
 		expSteps []*pb.Step
@@ -389,13 +410,13 @@ func testListenSteps(t *testing.T, client pb.TicTacGoServiceClient) {
 	}
 
 	for i, test := range tests {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		c.t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 
 			in := &pb.GetGameReq{Id: test.id}
 
-			stream, err := client.ListenSteps(ctx, in)
+			stream, err := c.client.ListenSteps(ctx, in)
 			if err != nil {
 				t.Fatalf("failed to open stream: %v", err)
 			}
@@ -419,11 +440,14 @@ func testListenSteps(t *testing.T, client pb.TicTacGoServiceClient) {
 	}
 }
 
-func testMakeMove(t *testing.T, client pb.TicTacGoServiceClient) {
+func testMakeMove(c TextCtx) {
+	seedTestData(c)
+
 	type Test struct {
-		in      *pb.MakeMoveReq
-		expGame *pb.Game
-		expCode codes.Code
+		in        *pb.MakeMoveReq
+		expGame   *pb.Game
+		expDbGame *db.GetGameRow
+		expCode   codes.Code
 	}
 
 	tests := []Test{
@@ -458,15 +482,25 @@ func testMakeMove(t *testing.T, client pb.TicTacGoServiceClient) {
 				Result:     tictactoe.Playing,
 				Steps:      []*pb.Step{},
 			},
+			expDbGame: &db.GetGameRow{
+				ID:          1,
+				XPlayer:     1,
+				OPlayer:     pgtype.Int8{Int64: 2, Valid: true},
+				BoardState:  "xxo______",
+				XTurn:       pgtype.Bool{Bool: false, Valid: true},
+				Result:      tictactoe.Playing,
+				XPlayerName: pgtype.Text{String: "user1", Valid: true},
+				OPlayerName: pgtype.Text{String: "user2", Valid: true},
+			},
 		},
 	}
 
 	for i, test := range tests {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		c.t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 
-			game, err := client.MakeMove(ctx, test.in)
+			game, err := c.client.MakeMove(ctx, test.in)
 			if test.expCode == 0 {
 				assert.Nil(t, err)
 
@@ -477,6 +511,16 @@ func testMakeMove(t *testing.T, client pb.TicTacGoServiceClient) {
 				s, ok := status.FromError(err)
 				assert.True(t, ok)
 				assert.Equal(t, test.expCode, s.Code())
+			}
+
+			if test.expDbGame != nil {
+				dbGame, err := c.queries.GetGame(ctx, test.in.GameId)
+				if err != nil {
+					t.Fatalf("failed to get game for assert: %v", err)
+				}
+
+				diff := cmp.Diff(*test.expDbGame, dbGame, cmpopts.IgnoreFields(dbGame, "UpdatedOn", "StartedOn"))
+				assert.Equal(t, "", diff)
 			}
 		})
 	}
