@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"TicTacGo/db"
@@ -39,9 +39,9 @@ func MapGetGame(gameRow db.GetGameRow, stepRows []db.GameStep) *pb.Game {
 }
 
 func MapGetGameWithUpdt(row db.GetGameRow, updt db.UpdateGameParams) *pb.Game {
-	var secondPlayer *pb.Player
+	var oPlayer *pb.Player
 	if row.OPlayer.Valid {
-		secondPlayer = &pb.Player{
+		oPlayer = &pb.Player{
 			Id:       row.OPlayer.Int64,
 			Username: row.OPlayerName.String,
 		}
@@ -53,7 +53,7 @@ func MapGetGameWithUpdt(row db.GetGameRow, updt db.UpdateGameParams) *pb.Game {
 			Id:       row.XPlayer,
 			Username: row.XPlayerName.String,
 		},
-		OPlayer:    secondPlayer,
+		OPlayer:    oPlayer,
 		BoardState: updt.BoardState,
 		XTurn:      updt.XTurn.Bool,
 		UpdatedOn:  &timestamppb.Timestamp{Seconds: updt.UpdatedOn.Time.Unix()},
@@ -66,6 +66,7 @@ func MapGetGameWithUpdt(row db.GetGameRow, updt db.UpdateGameParams) *pb.Game {
 func MapGetGames(gameRows []db.GetGamesRow, stepRows []db.GameStep) []*pb.Game {
 	stepsMap := make(map[int64][]*pb.Step)
 	var games []*pb.Game
+
 	for _, stepRow := range stepRows {
 		steps, ok := stepsMap[stepRow.GameID]
 		if !ok {
@@ -102,6 +103,7 @@ func MapGetGames(gameRows []db.GetGamesRow, stepRows []db.GameStep) []*pb.Game {
 		}
 		games = append(games, &game)
 	}
+
 	return games
 }
 
@@ -115,6 +117,21 @@ func MapStep(stepRow db.GameStep) *pb.Step {
 		XTurn:   stepRow.XTurn,
 		Result:  stepRow.Result,
 	}
+}
+
+func MapPlayers(rows []db.GetPlayersRow) []*pb.Player {
+	var players []*pb.Player
+
+	for _, row := range rows {
+		player := &pb.Player{
+			Id:       row.ID,
+			Username: row.Username,
+			Cnt:      int32(row.Cnt),
+		}
+		players = append(players, player)
+	}
+
+	return players
 }
 
 func GamesString(games []*pb.Game) string {

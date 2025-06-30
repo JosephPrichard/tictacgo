@@ -7,26 +7,33 @@ package service;
 import "google/protobuf/timestamp.proto";
 
 service TicTacGoService {
+    rpc Register (CredentialsReq) returns (Player) {}
+
+    rpc Login (CredentialsReq) returns (LoginResp) {}
+
+    rpc GetPlayers (GetPlayersReq) returns (Players) {}
+
+    rpc CreateGame (CreateGameReq) returns (Game) {}
+
     rpc GetGames (GetGamesReq) returns (Games) {}
 
     rpc GetGame (GetGameReq) returns (Game) {}
-
-    rpc CreateGame (CreateGameReq) returns (Game) {}
 
     rpc MakeMove (MakeMoveReq) returns (Game) {}
 
     rpc ListenSteps (GetGameReq) returns (stream Step) {} 
 
-    rpc Login (CredentialsReq) returns (AuthToken) {}
-
     rpc WhoAmI (AuthToken) returns (Player) {}
-
-    rpc CreatePlayer (CredentialsReq) returns (Player) {}
 }
 
 message Player {
     int64 id = 1;
     string username = 2;
+    int32 cnt = 3;
+}
+
+message Players {
+    repeated Player players = 1;
 }
 
 message Game {
@@ -66,6 +73,11 @@ message GetGamesReq {
     int32 perPage = 4;
 }
 
+message GetPlayersReq {
+    int32 page = 1;
+    int32 perPage = 2;
+}
+
 message GetGameReq {
     int64 id = 1;
 }
@@ -84,4 +96,9 @@ message MakeMoveReq {
 message CredentialsReq {
     string username = 1;
     string password = 2;
+}
+
+message LoginResp {
+    string token = 1;
+    Player Player = 2;
 }

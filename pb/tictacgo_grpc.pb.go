@@ -19,28 +19,30 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TicTacGoService_GetGames_FullMethodName     = "/service.TicTacGoService/GetGames"
-	TicTacGoService_GetGame_FullMethodName      = "/service.TicTacGoService/GetGame"
-	TicTacGoService_CreateGame_FullMethodName   = "/service.TicTacGoService/CreateGame"
-	TicTacGoService_MakeMove_FullMethodName     = "/service.TicTacGoService/MakeMove"
-	TicTacGoService_ListenSteps_FullMethodName  = "/service.TicTacGoService/ListenSteps"
-	TicTacGoService_Login_FullMethodName        = "/service.TicTacGoService/Login"
-	TicTacGoService_WhoAmI_FullMethodName       = "/service.TicTacGoService/WhoAmI"
-	TicTacGoService_CreatePlayer_FullMethodName = "/service.TicTacGoService/CreatePlayer"
+	TicTacGoService_Register_FullMethodName    = "/service.TicTacGoService/Register"
+	TicTacGoService_Login_FullMethodName       = "/service.TicTacGoService/Login"
+	TicTacGoService_GetPlayers_FullMethodName  = "/service.TicTacGoService/GetPlayers"
+	TicTacGoService_CreateGame_FullMethodName  = "/service.TicTacGoService/CreateGame"
+	TicTacGoService_GetGames_FullMethodName    = "/service.TicTacGoService/GetGames"
+	TicTacGoService_GetGame_FullMethodName     = "/service.TicTacGoService/GetGame"
+	TicTacGoService_MakeMove_FullMethodName    = "/service.TicTacGoService/MakeMove"
+	TicTacGoService_ListenSteps_FullMethodName = "/service.TicTacGoService/ListenSteps"
+	TicTacGoService_WhoAmI_FullMethodName      = "/service.TicTacGoService/WhoAmI"
 )
 
 // TicTacGoServiceClient is the client API for TicTacGoService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TicTacGoServiceClient interface {
+	Register(ctx context.Context, in *CredentialsReq, opts ...grpc.CallOption) (*Player, error)
+	Login(ctx context.Context, in *CredentialsReq, opts ...grpc.CallOption) (*LoginResp, error)
+	GetPlayers(ctx context.Context, in *GetPlayersReq, opts ...grpc.CallOption) (*Players, error)
+	CreateGame(ctx context.Context, in *CreateGameReq, opts ...grpc.CallOption) (*Game, error)
 	GetGames(ctx context.Context, in *GetGamesReq, opts ...grpc.CallOption) (*Games, error)
 	GetGame(ctx context.Context, in *GetGameReq, opts ...grpc.CallOption) (*Game, error)
-	CreateGame(ctx context.Context, in *CreateGameReq, opts ...grpc.CallOption) (*Game, error)
 	MakeMove(ctx context.Context, in *MakeMoveReq, opts ...grpc.CallOption) (*Game, error)
 	ListenSteps(ctx context.Context, in *GetGameReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Step], error)
-	Login(ctx context.Context, in *CredentialsReq, opts ...grpc.CallOption) (*AuthToken, error)
 	WhoAmI(ctx context.Context, in *AuthToken, opts ...grpc.CallOption) (*Player, error)
-	CreatePlayer(ctx context.Context, in *CredentialsReq, opts ...grpc.CallOption) (*Player, error)
 }
 
 type ticTacGoServiceClient struct {
@@ -49,6 +51,46 @@ type ticTacGoServiceClient struct {
 
 func NewTicTacGoServiceClient(cc grpc.ClientConnInterface) TicTacGoServiceClient {
 	return &ticTacGoServiceClient{cc}
+}
+
+func (c *ticTacGoServiceClient) Register(ctx context.Context, in *CredentialsReq, opts ...grpc.CallOption) (*Player, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Player)
+	err := c.cc.Invoke(ctx, TicTacGoService_Register_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ticTacGoServiceClient) Login(ctx context.Context, in *CredentialsReq, opts ...grpc.CallOption) (*LoginResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LoginResp)
+	err := c.cc.Invoke(ctx, TicTacGoService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ticTacGoServiceClient) GetPlayers(ctx context.Context, in *GetPlayersReq, opts ...grpc.CallOption) (*Players, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Players)
+	err := c.cc.Invoke(ctx, TicTacGoService_GetPlayers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ticTacGoServiceClient) CreateGame(ctx context.Context, in *CreateGameReq, opts ...grpc.CallOption) (*Game, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Game)
+	err := c.cc.Invoke(ctx, TicTacGoService_CreateGame_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *ticTacGoServiceClient) GetGames(ctx context.Context, in *GetGamesReq, opts ...grpc.CallOption) (*Games, error) {
@@ -65,16 +107,6 @@ func (c *ticTacGoServiceClient) GetGame(ctx context.Context, in *GetGameReq, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Game)
 	err := c.cc.Invoke(ctx, TicTacGoService_GetGame_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *ticTacGoServiceClient) CreateGame(ctx context.Context, in *CreateGameReq, opts ...grpc.CallOption) (*Game, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Game)
-	err := c.cc.Invoke(ctx, TicTacGoService_CreateGame_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -110,16 +142,6 @@ func (c *ticTacGoServiceClient) ListenSteps(ctx context.Context, in *GetGameReq,
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type TicTacGoService_ListenStepsClient = grpc.ServerStreamingClient[Step]
 
-func (c *ticTacGoServiceClient) Login(ctx context.Context, in *CredentialsReq, opts ...grpc.CallOption) (*AuthToken, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AuthToken)
-	err := c.cc.Invoke(ctx, TicTacGoService_Login_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *ticTacGoServiceClient) WhoAmI(ctx context.Context, in *AuthToken, opts ...grpc.CallOption) (*Player, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Player)
@@ -130,28 +152,19 @@ func (c *ticTacGoServiceClient) WhoAmI(ctx context.Context, in *AuthToken, opts 
 	return out, nil
 }
 
-func (c *ticTacGoServiceClient) CreatePlayer(ctx context.Context, in *CredentialsReq, opts ...grpc.CallOption) (*Player, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Player)
-	err := c.cc.Invoke(ctx, TicTacGoService_CreatePlayer_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // TicTacGoServiceServer is the server API for TicTacGoService service.
 // All implementations must embed UnimplementedTicTacGoServiceServer
 // for forward compatibility.
 type TicTacGoServiceServer interface {
+	Register(context.Context, *CredentialsReq) (*Player, error)
+	Login(context.Context, *CredentialsReq) (*LoginResp, error)
+	GetPlayers(context.Context, *GetPlayersReq) (*Players, error)
+	CreateGame(context.Context, *CreateGameReq) (*Game, error)
 	GetGames(context.Context, *GetGamesReq) (*Games, error)
 	GetGame(context.Context, *GetGameReq) (*Game, error)
-	CreateGame(context.Context, *CreateGameReq) (*Game, error)
 	MakeMove(context.Context, *MakeMoveReq) (*Game, error)
 	ListenSteps(*GetGameReq, grpc.ServerStreamingServer[Step]) error
-	Login(context.Context, *CredentialsReq) (*AuthToken, error)
 	WhoAmI(context.Context, *AuthToken) (*Player, error)
-	CreatePlayer(context.Context, *CredentialsReq) (*Player, error)
 	mustEmbedUnimplementedTicTacGoServiceServer()
 }
 
@@ -162,14 +175,23 @@ type TicTacGoServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedTicTacGoServiceServer struct{}
 
+func (UnimplementedTicTacGoServiceServer) Register(context.Context, *CredentialsReq) (*Player, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Register not implemented")
+}
+func (UnimplementedTicTacGoServiceServer) Login(context.Context, *CredentialsReq) (*LoginResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedTicTacGoServiceServer) GetPlayers(context.Context, *GetPlayersReq) (*Players, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPlayers not implemented")
+}
+func (UnimplementedTicTacGoServiceServer) CreateGame(context.Context, *CreateGameReq) (*Game, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateGame not implemented")
+}
 func (UnimplementedTicTacGoServiceServer) GetGames(context.Context, *GetGamesReq) (*Games, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGames not implemented")
 }
 func (UnimplementedTicTacGoServiceServer) GetGame(context.Context, *GetGameReq) (*Game, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGame not implemented")
-}
-func (UnimplementedTicTacGoServiceServer) CreateGame(context.Context, *CreateGameReq) (*Game, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateGame not implemented")
 }
 func (UnimplementedTicTacGoServiceServer) MakeMove(context.Context, *MakeMoveReq) (*Game, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MakeMove not implemented")
@@ -177,14 +199,8 @@ func (UnimplementedTicTacGoServiceServer) MakeMove(context.Context, *MakeMoveReq
 func (UnimplementedTicTacGoServiceServer) ListenSteps(*GetGameReq, grpc.ServerStreamingServer[Step]) error {
 	return status.Errorf(codes.Unimplemented, "method ListenSteps not implemented")
 }
-func (UnimplementedTicTacGoServiceServer) Login(context.Context, *CredentialsReq) (*AuthToken, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
-}
 func (UnimplementedTicTacGoServiceServer) WhoAmI(context.Context, *AuthToken) (*Player, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WhoAmI not implemented")
-}
-func (UnimplementedTicTacGoServiceServer) CreatePlayer(context.Context, *CredentialsReq) (*Player, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreatePlayer not implemented")
 }
 func (UnimplementedTicTacGoServiceServer) mustEmbedUnimplementedTicTacGoServiceServer() {}
 func (UnimplementedTicTacGoServiceServer) testEmbeddedByValue()                         {}
@@ -205,6 +221,78 @@ func RegisterTicTacGoServiceServer(s grpc.ServiceRegistrar, srv TicTacGoServiceS
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&TicTacGoService_ServiceDesc, srv)
+}
+
+func _TicTacGoService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CredentialsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TicTacGoServiceServer).Register(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TicTacGoService_Register_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TicTacGoServiceServer).Register(ctx, req.(*CredentialsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TicTacGoService_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CredentialsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TicTacGoServiceServer).Login(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TicTacGoService_Login_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TicTacGoServiceServer).Login(ctx, req.(*CredentialsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TicTacGoService_GetPlayers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayersReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TicTacGoServiceServer).GetPlayers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TicTacGoService_GetPlayers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TicTacGoServiceServer).GetPlayers(ctx, req.(*GetPlayersReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TicTacGoService_CreateGame_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateGameReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TicTacGoServiceServer).CreateGame(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TicTacGoService_CreateGame_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TicTacGoServiceServer).CreateGame(ctx, req.(*CreateGameReq))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _TicTacGoService_GetGames_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -243,24 +331,6 @@ func _TicTacGoService_GetGame_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TicTacGoService_CreateGame_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateGameReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TicTacGoServiceServer).CreateGame(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TicTacGoService_CreateGame_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TicTacGoServiceServer).CreateGame(ctx, req.(*CreateGameReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _TicTacGoService_MakeMove_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MakeMoveReq)
 	if err := dec(in); err != nil {
@@ -290,24 +360,6 @@ func _TicTacGoService_ListenSteps_Handler(srv interface{}, stream grpc.ServerStr
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type TicTacGoService_ListenStepsServer = grpc.ServerStreamingServer[Step]
 
-func _TicTacGoService_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CredentialsReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TicTacGoServiceServer).Login(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TicTacGoService_Login_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TicTacGoServiceServer).Login(ctx, req.(*CredentialsReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _TicTacGoService_WhoAmI_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AuthToken)
 	if err := dec(in); err != nil {
@@ -326,24 +378,6 @@ func _TicTacGoService_WhoAmI_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TicTacGoService_CreatePlayer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CredentialsReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TicTacGoServiceServer).CreatePlayer(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TicTacGoService_CreatePlayer_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TicTacGoServiceServer).CreatePlayer(ctx, req.(*CredentialsReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // TicTacGoService_ServiceDesc is the grpc.ServiceDesc for TicTacGoService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -351,6 +385,22 @@ var TicTacGoService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "service.TicTacGoService",
 	HandlerType: (*TicTacGoServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Register",
+			Handler:    _TicTacGoService_Register_Handler,
+		},
+		{
+			MethodName: "Login",
+			Handler:    _TicTacGoService_Login_Handler,
+		},
+		{
+			MethodName: "GetPlayers",
+			Handler:    _TicTacGoService_GetPlayers_Handler,
+		},
+		{
+			MethodName: "CreateGame",
+			Handler:    _TicTacGoService_CreateGame_Handler,
+		},
 		{
 			MethodName: "GetGames",
 			Handler:    _TicTacGoService_GetGames_Handler,
@@ -360,24 +410,12 @@ var TicTacGoService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TicTacGoService_GetGame_Handler,
 		},
 		{
-			MethodName: "CreateGame",
-			Handler:    _TicTacGoService_CreateGame_Handler,
-		},
-		{
 			MethodName: "MakeMove",
 			Handler:    _TicTacGoService_MakeMove_Handler,
 		},
 		{
-			MethodName: "Login",
-			Handler:    _TicTacGoService_Login_Handler,
-		},
-		{
 			MethodName: "WhoAmI",
 			Handler:    _TicTacGoService_WhoAmI_Handler,
-		},
-		{
-			MethodName: "CreatePlayer",
-			Handler:    _TicTacGoService_CreatePlayer_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

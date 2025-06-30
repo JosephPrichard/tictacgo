@@ -1,9 +1,10 @@
-package main
+package server
 
 import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"log"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"TicTacGo/pb"
 	"TicTacGo/tictactoe"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
@@ -26,6 +26,90 @@ type GrpcServer struct {
 	pb.UnimplementedTicTacGoServiceServer
 	queries *db.Queries
 	pool    *pgxpool.Pool
+}
+
+func (s *GrpcServer) Register(ctx context.Context, in *pb.CredentialsReq) (*pb.Player, error) {
+	if in == nil {
+		return nil, errors.New("expected input request to be provided, was nil")
+	}
+
+	params := db.InsertPlayerParams{
+		Username: in.Username,
+		Passwd:   in.Password,
+	}
+
+	row, err := s.queries.InsertPlayer(ctx, params)
+	if err != nil {
+		log.Printf("failed to insert player: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to insert player for params: %s", params)
+	}
+
+	player := pb.Player{
+		Id:       row.ID,
+		Username: row.Username,
+	}
+
+	log.Printf("successfully created player with resp: %v", player.String())
+
+	return &player, nil
+}
+
+func (s *GrpcServer) Login(ctx context.Context, in *pb.CredentialsReq) (*pb.LoginResp, error) {
+	if in == nil {
+		return nil, errors.New("expected input request to be provided, was nil")
+	}
+
+	verifyParams := db.VerifyPlayerParams{
+		Username: in.Username,
+		Passwd:   in.Password,
+	}
+
+	row, verifyErr := s.queries.VerifyPlayer(ctx, verifyParams)
+	if errors.Is(verifyErr, pgx.ErrNoRows) {
+		log.Printf("failed to authorize the user for username: %v", verifyParams.Username)
+		return nil, status.Errorf(codes.PermissionDenied, "authorization credentials are invalid or missing")
+	}
+	if verifyErr != nil {
+		log.Printf("failed to verifyParams player: %v", verifyErr)
+		return nil, status.Errorf(codes.Internal, "failed to verifyParams player for params: %+v", verifyParams)
+	}
+
+	token := uuid.New().String()
+	session := db.InsertSessionParams{
+		Token:    token,
+		PlayerID: row.ID,
+	}
+
+	_, sessErr := s.queries.InsertSession(ctx, session)
+	if sessErr != nil {
+		log.Printf("failed to insert session: %v", sessErr)
+		return nil, status.Errorf(codes.Internal, "failed to insert session for params: %+v", session)
+	}
+
+	resp := pb.LoginResp{Token: token, Player: &pb.Player{Id: row.ID, Username: in.Username}}
+	return &resp, nil
+}
+
+func (s *GrpcServer) GetPlayers(ctx context.Context, in *pb.GetPlayersReq) (*pb.Players, error) {
+	if in == nil {
+		return nil, errors.New("expected input request to be provided, was nil")
+	}
+
+	params := db.GetPlayersParams{
+		ID:    int64((in.Page - 1) * in.PerPage),
+		Limit: in.PerPage,
+	}
+
+	rows, err := s.queries.GetPlayers(ctx, params)
+	if err != nil {
+		log.Printf("failed to get players: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to get players for params: %+v", params)
+	}
+
+	players := MapPlayers(rows)
+
+	resp := pb.Players{Players: players}
+	return &resp, nil
 }
 
 func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.Game, error) {
@@ -77,32 +161,6 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.
 	log.Printf("successfully created game: %+v, board: %s", game.String(), tictactoe.FmtBoard(board))
 
 	return &game, nil
-}
-
-func (s *GrpcServer) CreatePlayer(ctx context.Context, in *pb.CredentialsReq) (*pb.Player, error) {
-	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
-	}
-
-	params := db.InsertPlayerParams{
-		Username: in.Username,
-		Passwd:   in.Password,
-	}
-
-	row, err := s.queries.InsertPlayer(ctx, params)
-	if err != nil {
-		log.Printf("failed to insert player: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to insert player for params: %s", params)
-	}
-
-	player := pb.Player{
-		Id:       row.ID,
-		Username: row.Username,
-	}
-
-	log.Printf("successfully created player with resp: %v", player.String())
-
-	return &player, nil
 }
 
 func (s *GrpcServer) GetGame(ctx context.Context, in *pb.GetGameReq) (*pb.Game, error) {
@@ -230,7 +288,7 @@ func (s *GrpcServer) ListenSteps(in *pb.GetGameReq, stream grpc.ServerStreamingS
 			return status.Errorf(codes.Internal, "failed to listen steps for game id: %d", in.Id)
 		}
 
-		board, err := tictactoe.BoardFromString(row.Board)
+		board, err := tictactoe.ParseBoard(row.Board)
 		if err != nil {
 			log.Printf("error converting board from string: %v", err)
 			return status.Error(codes.Internal, "error converting board from string")
@@ -249,45 +307,6 @@ func (s *GrpcServer) ListenSteps(in *pb.GetGameReq, stream grpc.ServerStreamingS
 		}
 	}
 	return nil
-}
-
-func (s *GrpcServer) Login(ctx context.Context, in *pb.CredentialsReq) (*pb.AuthToken, error) {
-	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
-	}
-
-	// retrieve if the user credentials are valid
-	verify := db.VerifyPlayerParams{
-		Username: in.Username,
-		Passwd:   in.Password,
-	}
-
-	row, verifyErr := s.queries.VerifyPlayer(ctx, verify)
-	if errors.Is(verifyErr, pgx.ErrNoRows) {
-		log.Printf("failed to authorize the user for username: %v", verify.Username)
-		return nil, status.Errorf(codes.PermissionDenied, "authorization credentials are invalid or missing")
-	}
-	if verifyErr != nil {
-		log.Printf("failed to verify player: %v", verifyErr)
-		return nil, status.Errorf(codes.Internal, "failed to verify player for params: %+v", verify)
-	}
-
-	// insert the session from the logged in player
-	token := uuid.New().String()
-	session := db.InsertSessionParams{
-		Token:    token,
-		PlayerID: row.ID,
-	}
-
-	_, sessErr := s.queries.InsertSession(ctx, session)
-	if sessErr != nil {
-		log.Printf("failed to insert session: %v", sessErr)
-		return nil, status.Errorf(codes.Internal, "failed to insert session for params: %+v", session)
-	}
-
-	resp := pb.AuthToken{Token: token}
-
-	return &resp, nil
 }
 
 func (s *GrpcServer) MakeMove(ctx context.Context, in *pb.MakeMoveReq) (*pb.Game, error) {
@@ -319,7 +338,7 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *pb.MakeMoveReq) (*pb.Game
 	} else {
 		tileValue = tictactoe.O
 	}
-	board, err := tictactoe.BoardFromString(gameRow.BoardState)
+	board, err := tictactoe.ParseBoard(gameRow.BoardState)
 	if err != nil {
 		log.Printf("error converting board from string: %v", err)
 		return nil, status.Error(codes.Internal, "error converting board from string")
@@ -348,7 +367,7 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *pb.MakeMoveReq) (*pb.Game
 		XTurn:   turn,
 		Result:  result,
 	}
-	err = s.UpdateGameTransaction(ctx, in.GameId, updtGameParams, instStepParams)
+	err = s.UpdateGameTrans(ctx, in.GameId, updtGameParams, instStepParams)
 	if err != nil {
 		return nil, err
 	}

@@ -66,7 +66,8 @@ WHERE game_id = $1
 ORDER BY ord DESC LIMIT 1;
 
 -- name: GetPlayers :many
-SELECT id, username FROM player_accounts
+SELECT id, username, (SELECT COUNT(*) FROM player_sessions s WHERE s.player_id = a.id) as cnt
+FROM player_accounts a
 WHERE id > $1
 ORDER BY id ASC LIMIT $2;
 

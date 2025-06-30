@@ -34,4 +34,4 @@ CREATE TABLE game_steps (
     PRIMARY KEY(game_id, ord)
 );
 
-CREATE UNIQUE INDEX player_accounts_username ON player_accounts(username);
+CREATE INDEX player_sessions_id ON player_sessions(player_id);

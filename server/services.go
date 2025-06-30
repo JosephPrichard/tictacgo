@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"TicTacGo/db"
@@ -44,7 +44,7 @@ func (s *GrpcServer) GetGameAndSession(ctx context.Context, token string, gameId
 	return sessRow, gameRow, nil
 }
 
-func (s *GrpcServer) UpdateGameTransaction(ctx context.Context, gameId int64, updtGameParams db.UpdateGameParams, instStepParams db.InsertStepParams) error {
+func (s *GrpcServer) UpdateGameTrans(ctx context.Context, gameId int64, updtGameParams db.UpdateGameParams, instStepParams db.InsertStepParams) error {
 	dbCtx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 

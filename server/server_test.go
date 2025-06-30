@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"TicTacGo/db"
@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/testing/protocmp"
 	"io"
+	"log"
 	"net"
 	"testing"
 	"time"
@@ -75,11 +76,9 @@ var testPbGames = []pb.Game{
 	},
 }
 
-type TextCtx struct {
-	ctx     context.Context
-	t       *testing.T
-	pool    *pgxpool.Pool
+type TestArgs struct {
 	client  pb.TicTacGoServiceClient
+	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
@@ -92,7 +91,7 @@ func createEmbeddedDb(t *testing.T) func() {
 		RuntimePath("/tmp").
 		Port(uint32(testDbPort)).
 		StartTimeout(30 * time.Second)
-	t.Logf("starting the embedded test database with config: %v", config)
+	t.Logf("starting the embedded test database with config.go: %v", config)
 
 	postgres := embeddedpostgres.NewDatabase(config)
 	err := postgres.Start()
@@ -112,29 +111,31 @@ func createEmbeddedDb(t *testing.T) func() {
 	return closer
 }
 
-func seedTestData(c TextCtx) {
-	conn, err := c.pool.Acquire(c.ctx)
+func seedTestData(c TestArgs) {
+	ctx := context.Background()
+
+	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		c.t.Fatalf("failed to acquire a db conn with err: %v", err)
+		log.Fatalf("failed to acquire a db conn with err: %v", err)
 	}
 	defer conn.Release()
 
-	_, err = conn.Exec(c.ctx, "DROP TABLE IF EXISTS player_accounts, player_sessions, games, game_steps;")
+	_, err = conn.Exec(ctx, "DROP TABLE IF EXISTS player_accounts, player_sessions, games, game_steps;")
 	if err != nil {
-		c.t.Fatalf("failed to drop schema with err: %v", err)
+		log.Fatalf("failed to drop schema with err: %v", err)
 	}
 
-	_, err = conn.Exec(c.ctx, db.CreateSchema)
+	_, err = conn.Exec(ctx, db.CreateSchema)
 	if err != nil {
-		c.t.Fatalf("failed to execute CreateSchema with err: %v", err)
+		log.Fatalf("failed to execute CreateSchema with err: %v", err)
 	}
 
-	_, err = conn.Exec(c.ctx, db.SeedTestData)
+	_, err = conn.Exec(ctx, db.SeedTestData)
 	if err != nil {
-		c.t.Fatalf("failed to execute SeedTestData with err: %v", err)
+		log.Fatalf("failed to execute SeedTestData with err: %v", err)
 	}
 
-	c.t.Logf("successfully created the database schema")
+	log.Printf("successfully created the database schema")
 }
 
 func serve(ctx context.Context, t *testing.T, pool *pgxpool.Pool) (pb.TicTacGoServiceClient, func()) {
@@ -151,14 +152,6 @@ func serve(ctx context.Context, t *testing.T, pool *pgxpool.Pool) (pb.TicTacGoSe
 		}
 	}()
 
-	dial := func(context.Context, string) (net.Conn, error) {
-		return lis.Dial()
-	}
-	conn, err := grpc.DialContext(ctx, "", grpc.WithContextDialer(dial), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Logf("error connecting to server: %v", err)
-	}
-
 	closer := func() {
 		err := lis.Close()
 		if err != nil {
@@ -167,8 +160,16 @@ func serve(ctx context.Context, t *testing.T, pool *pgxpool.Pool) (pb.TicTacGoSe
 		baseServer.Stop()
 	}
 
-	client := pb.NewTicTacGoServiceClient(conn)
+	dial := func(context.Context, string) (net.Conn, error) {
+		return lis.Dial()
+	}
 
+	conn, err := grpc.DialContext(ctx, "", grpc.WithContextDialer(dial), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Logf("error connecting to server: %v", err)
+	}
+
+	client := pb.NewTicTacGoServiceClient(conn)
 	return client, closer
 }
 
@@ -189,48 +190,160 @@ func TestServer(t *testing.T) {
 	client, closer := serve(ctx, t, pool)
 	defer closer()
 
-	c := TextCtx{
-		ctx:     ctx,
-		t:       t,
+	args := TestArgs{
 		pool:    pool,
 		client:  client,
 		queries: queries,
 	}
 
-	t.Run("CreateGame", func(t *testing.T) {
-		testCreateGame(c)
-	})
-	t.Run("CreatePlayer", func(t *testing.T) {
-		testCreatePlayer(c)
-	})
-	t.Run("GetGame", func(t *testing.T) {
-		testGetGame(c)
+	t.Run("Register", func(t *testing.T) {
+		testRegister(t, args)
 	})
 	t.Run("Login", func(t *testing.T) {
-		testLogin(c)
+		testLogin(t, args)
+	})
+	t.Run("GetPlayers", func(t *testing.T) {
+		testGetPlayers(t, args)
+	})
+	t.Run("CreateGame", func(t *testing.T) {
+		testCreateGame(t, args)
+	})
+	t.Run("GetGame", func(t *testing.T) {
+		testGetGame(t, args)
 	})
 	t.Run("GetGames", func(t *testing.T) {
-		testGetGames(c)
+		testGetGames(t, args)
 	})
 	t.Run("ListenSteps", func(t *testing.T) {
-		testListenSteps(c)
+		testListenSteps(t, args)
 	})
 	t.Run("MakeMove", func(t *testing.T) {
-		testMakeMove(c)
+		testMakeMove(t, args)
 	})
 }
 
-func testCreateGame(c TextCtx) {
-	seedTestData(c)
+func testRegister(t *testing.T, args TestArgs) {
+	seedTestData(args)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+
+	in := &pb.CredentialsReq{
+		Username: "user6",
+		Password: "password6",
+	}
+
+	player, err := args.client.Register(ctx, in)
+	if err != nil {
+		t.Fatalf("failed to register: %v", err)
+	}
+
+	assert.Equal(t, int64(6), player.Id)
+	assert.Equal(t, "user6", player.Username)
+
+	dbPlayer, err := args.queries.GetPlayer(ctx, 6)
+	if err != nil {
+		t.Fatalf("failed to get game for assert: %v", err)
+	}
+
+	assert.Equal(t, int64(6), dbPlayer.ID)
+	assert.Equal(t, "user6", dbPlayer.Username)
+}
+
+func testLogin(t *testing.T, args TestArgs) {
+	seedTestData(args)
+
+	type Test struct {
+		username string
+		password string
+		expCode  codes.Code
+	}
+
+	tests := []Test{
+		{username: "user1", password: "password123", expCode: 0},
+		{username: "user1", password: "password-incorrect", expCode: codes.PermissionDenied},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+			defer cancel()
+
+			in := &pb.CredentialsReq{
+				Username: test.username,
+				Password: test.password,
+			}
+
+			_, err := args.client.Login(ctx, in)
+			if test.expCode == 0 {
+				assert.Nil(t, err)
+			}
+			if test.expCode != 0 {
+				s, ok := status.FromError(err)
+				assert.True(t, ok)
+				assert.Equal(t, test.expCode, s.Code())
+			}
+		})
+	}
+}
+
+func testGetPlayers(t *testing.T, args TestArgs) {
+	seedTestData(args)
+
+	type Test struct {
+		in         *pb.GetPlayersReq
+		expPlayers []*pb.Player
+	}
+
+	tests := []Test{
+		{
+			in: &pb.GetPlayersReq{Page: 1, PerPage: 3},
+			expPlayers: []*pb.Player{
+				{Username: "user1", Id: 1, Cnt: 1},
+				{Username: "user2", Id: 2, Cnt: 0},
+				{Username: "user3", Id: 3, Cnt: 1},
+			},
+		},
+		{
+			in: &pb.GetPlayersReq{Page: 2, PerPage: 3},
+			expPlayers: []*pb.Player{
+				{Username: "user4", Id: 4},
+				{Username: "user5", Id: 5},
+			},
+		},
+		{
+			in:         &pb.GetPlayersReq{Page: 5, PerPage: 20},
+			expPlayers: nil,
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+			defer cancel()
+
+			players, err := args.client.GetPlayers(ctx, test.in)
+			if err != nil {
+				t.Fatalf("failed to get players: %v", err)
+			}
+
+			diff := cmp.Diff(test.expPlayers, players.Players, protocmp.Transform())
+			assert.Equal(t, "", diff)
+		})
+	}
+}
+
+func testCreateGame(t *testing.T, args TestArgs) {
+	seedTestData(args)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
 	in := &pb.CreateGameReq{Token: "User1Token"}
 
-	game, err := c.client.CreateGame(ctx, in)
+	game, err := args.client.CreateGame(ctx, in)
 	if err != nil {
-		c.t.Fatalf("failed to create game: %v", err)
+		t.Fatalf("failed to create game: %v", err)
 	}
 
 	expectedGame := &pb.Game{
@@ -245,11 +358,11 @@ func testCreateGame(c TextCtx) {
 		Steps:      []*pb.Step{},
 	}
 	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(expectedGame, "updated_on", "started_on"))
-	assert.Equal(c.t, "", diff)
+	assert.Equal(t, "", diff)
 
-	dbGame, err := c.queries.GetGame(ctx, 5)
+	dbGame, err := args.queries.GetGame(ctx, 5)
 	if err != nil {
-		c.t.Fatalf("failed to get game for assert: %v", err)
+		t.Fatalf("failed to get game for assert: %v", err)
 	}
 
 	expectedDbGame := db.GetGameRow{
@@ -264,95 +377,30 @@ func testCreateGame(c TextCtx) {
 	}
 
 	diff = cmp.Diff(expectedDbGame, dbGame, cmpopts.IgnoreFields(dbGame, "UpdatedOn", "StartedOn"))
-	assert.Equal(c.t, "", diff)
+	assert.Equal(t, "", diff)
 }
 
-func testCreatePlayer(c TextCtx) {
-	seedTestData(c)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	defer cancel()
-
-	in := &pb.CredentialsReq{
-		Username: "user4",
-		Password: "password4",
-	}
-
-	player, err := c.client.CreatePlayer(ctx, in)
-	if err != nil {
-		c.t.Fatalf("failed to create player: %v", err)
-	}
-
-	assert.Equal(c.t, int64(4), player.Id)
-	assert.Equal(c.t, "user4", player.Username)
-
-	dbPlayer, err := c.queries.GetPlayer(ctx, 4)
-	if err != nil {
-		c.t.Fatalf("failed to get game for assert: %v", err)
-	}
-
-	assert.Equal(c.t, int64(4), dbPlayer.ID)
-	assert.Equal(c.t, "user4", dbPlayer.Username)
-}
-
-func testGetGame(c TextCtx) {
-	seedTestData(c)
+func testGetGame(t *testing.T, args TestArgs) {
+	seedTestData(args)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
 	in := &pb.GetGameReq{Id: 1}
 
-	game, err := c.client.GetGame(ctx, in)
+	game, err := args.client.GetGame(ctx, in)
 	if err != nil {
-		c.t.Fatalf("failed to get game: %v", err)
+		t.Fatalf("failed to get game: %v", err)
 	}
 
 	expectedGame := &testPbGames[0]
 
 	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
-	assert.Equal(c.t, "", diff)
+	assert.Equal(t, "", diff)
 }
 
-func testLogin(c TextCtx) {
-	seedTestData(c)
-
-	type Test struct {
-		username string
-		password string
-		expCode  codes.Code
-	}
-
-	tests := []Test{
-		{username: "user1", password: "password123", expCode: 0},
-		{username: "user1", password: "password-incorrect", expCode: codes.PermissionDenied},
-	}
-
-	for i, test := range tests {
-		c.t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-			defer cancel()
-
-			in := &pb.CredentialsReq{
-				Username: test.username,
-				Password: test.password,
-			}
-
-			_, err := c.client.Login(ctx, in)
-			if test.expCode == 0 {
-				assert.Nil(t, err)
-			}
-			if test.expCode != 0 {
-				s, ok := status.FromError(err)
-				assert.True(t, ok)
-				assert.Equal(t, test.expCode, s.Code())
-			}
-		})
-	}
-}
-
-func testGetGames(c TextCtx) {
-	seedTestData(c)
+func testGetGames(t *testing.T, args TestArgs) {
+	seedTestData(args)
 
 	type Test struct {
 		params   *pb.GetGamesReq
@@ -371,11 +419,11 @@ func testGetGames(c TextCtx) {
 	}
 
 	for i, test := range tests {
-		c.t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 
-			games, err := c.client.GetGames(ctx, test.params)
+			games, err := args.client.GetGames(ctx, test.params)
 			if err != nil {
 				t.Fatalf("failed to get games: %v", err)
 			}
@@ -388,8 +436,8 @@ func testGetGames(c TextCtx) {
 	}
 }
 
-func testListenSteps(c TextCtx) {
-	seedTestData(c)
+func testListenSteps(t *testing.T, args TestArgs) {
+	seedTestData(args)
 
 	type Test struct {
 		id       int64
@@ -410,13 +458,13 @@ func testListenSteps(c TextCtx) {
 	}
 
 	for i, test := range tests {
-		c.t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 
 			in := &pb.GetGameReq{Id: test.id}
 
-			stream, err := c.client.ListenSteps(ctx, in)
+			stream, err := args.client.ListenSteps(ctx, in)
 			if err != nil {
 				t.Fatalf("failed to open stream: %v", err)
 			}
@@ -440,8 +488,8 @@ func testListenSteps(c TextCtx) {
 	}
 }
 
-func testMakeMove(c TextCtx) {
-	seedTestData(c)
+func testMakeMove(t *testing.T, args TestArgs) {
+	seedTestData(args)
 
 	type Test struct {
 		in        *pb.MakeMoveReq
@@ -496,11 +544,11 @@ func testMakeMove(c TextCtx) {
 	}
 
 	for i, test := range tests {
-		c.t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 
-			game, err := c.client.MakeMove(ctx, test.in)
+			game, err := args.client.MakeMove(ctx, test.in)
 			if test.expCode == 0 {
 				assert.Nil(t, err)
 
@@ -514,7 +562,7 @@ func testMakeMove(c TextCtx) {
 			}
 
 			if test.expDbGame != nil {
-				dbGame, err := c.queries.GetGame(ctx, test.in.GameId)
+				dbGame, err := args.queries.GetGame(ctx, test.in.GameId)
 				if err != nil {
 					t.Fatalf("failed to get game for assert: %v", err)
 				}

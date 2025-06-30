@@ -247,7 +247,8 @@ func (q *Queries) GetPlayer(ctx context.Context, id int64) (GetPlayerRow, error)
 }
 
 const getPlayers = `-- name: GetPlayers :many
-SELECT id, username FROM player_accounts
+SELECT id, username, (SELECT COUNT(*) FROM player_sessions s WHERE s.player_id = a.id) as cnt
+FROM player_accounts a
 WHERE id > $1
 ORDER BY id ASC LIMIT $2
 `
@@ -260,6 +261,7 @@ type GetPlayersParams struct {
 type GetPlayersRow struct {
 	ID       int64
 	Username string
+	Cnt      int64
 }
 
 func (q *Queries) GetPlayers(ctx context.Context, arg GetPlayersParams) ([]GetPlayersRow, error) {
@@ -271,7 +273,7 @@ func (q *Queries) GetPlayers(ctx context.Context, arg GetPlayersParams) ([]GetPl
 	var items []GetPlayersRow
 	for rows.Next() {
 		var i GetPlayersRow
-		if err := rows.Scan(&i.ID, &i.Username); err != nil {
+		if err := rows.Scan(&i.ID, &i.Username, &i.Cnt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

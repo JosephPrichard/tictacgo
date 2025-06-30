@@ -46,7 +46,7 @@ var winLines = [][]Tile{
 	{topRight, middle, bottomLeft},    // Diagonal /
 }
 
-type Board = [9]uint8
+type Board = [3][3]uint8
 
 type Tile struct {
 	Row int32
@@ -69,22 +69,21 @@ func MoveBoard(board Board, turn bool, row int32, col int32, value uint8) (Board
 	if tile.Row < 0 || tile.Col < 0 || tile.Row > 2 && tile.Col > 2 {
 		return board, turn, ErrTile
 	}
-	index := GetIndex(tile)
 
-	t := board[index]
+	t := board[tile.Row][tile.Col]
 	if t != E {
 		return board, turn, ErrOccupied
 	}
 
-	board[index] = value
+	board[tile.Row][tile.Col] = value
 	return board, !turn, nil
 }
 
 func GetResult(board Board) int32 {
 	for _, line := range winLines {
-		value0 := board[GetIndex(line[0])]
-		value1 := board[GetIndex(line[1])]
-		value2 := board[GetIndex(line[2])]
+		value0 := board[line[0].Row][line[0].Col]
+		value1 := board[line[1].Row][line[1].Col]
+		value2 := board[line[2].Row][line[2].Col]
 		if value0 != E && value0 == value1 && value1 == value2 {
 			switch value0 {
 			case X:
@@ -97,7 +96,7 @@ func GetResult(board Board) int32 {
 
 	isDraw := true
 	for _, tile := range allLines {
-		value := board[GetIndex(tile)]
+		value := board[tile.Row][tile.Col]
 		isDraw = isDraw && value != E
 	}
 	if isDraw {
@@ -111,7 +110,7 @@ func FmtBoard(board Board) string {
 	var sb strings.Builder
 	sb.WriteRune('\n')
 	for i := range 9 {
-		tile := board[i]
+		tile := board[i/3][i%3]
 
 		var c rune
 		switch tile {
@@ -148,32 +147,34 @@ func FmtBoard(board Board) string {
 
 func BoardToString(board Board) string {
 	var sb strings.Builder
-	for _, tile := range board {
-		var c rune
-		switch tile {
-		case E:
-			c = '_'
-			break
-		case X:
-			c = 'x'
-			break
-		case O:
-			c = 'o'
-			break
-		default:
-			log.Printf("attempting to convert invalid board to string: %v", board)
-			c = '?'
-			break
+	for _, row := range board {
+		for _, tile := range row {
+			var c rune
+			switch tile {
+			case E:
+				c = '_'
+				break
+			case X:
+				c = 'x'
+				break
+			case O:
+				c = 'o'
+				break
+			default:
+				log.Printf("attempting to convert invalid board to string: %v", board)
+				c = '?'
+				break
+			}
+			sb.WriteRune(c)
 		}
-		sb.WriteRune(c)
 	}
 	return sb.String()
 }
 
-func BoardFromString(s string) (Board, error) {
+func ParseBoard(s string) (Board, error) {
 	var board Board
 	for i, c := range s {
-		if i >= len(board) {
+		if i >= 9 {
 			return Board{}, fmt.Errorf("attempting to parse invalid board from string: %s, length exceeds maximum: %d", s, len(board))
 		}
 		var tile uint8
@@ -190,7 +191,7 @@ func BoardFromString(s string) (Board, error) {
 		default:
 			return Board{}, fmt.Errorf("attempting to parse invalid board from string: %s, invalid symbol: %v at %d", s, c, i)
 		}
-		board[i] = tile
+		board[i/3][i%3] = tile
 	}
 	return board, nil
 }
