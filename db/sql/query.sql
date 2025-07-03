@@ -88,5 +88,5 @@ WHERE token = $1;
 -- name: GetPlayer :one
 SELECT id, username FROM player_accounts WHERE id = $1;
 
--- name: VerifyPlayer :one
-SELECT id, username FROM player_accounts WHERE username = $1 AND passwd = $2;
+-- name: GetAccountByName :one
+SELECT id, username, passwd FROM player_accounts WHERE UPPER(username) = UPPER($1);

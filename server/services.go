@@ -19,7 +19,7 @@ func (s *GrpcServer) GetGameAndSession(ctx context.Context, token string, gameId
 
 	eg.Go(func() error {
 		var err error
-		sessRow, err = s.queries.GetSession(egCtx, token)
+		sessRow, err = s.Queries.GetSession(egCtx, token)
 		if err != nil {
 			log.Printf("failed to get session: %v", err)
 			return status.Errorf(codes.PermissionDenied, "failed to get session for params: %s", token)
@@ -28,7 +28,7 @@ func (s *GrpcServer) GetGameAndSession(ctx context.Context, token string, gameId
 	})
 	eg.Go(func() error {
 		var err error
-		gameRow, err = s.queries.GetGame(egCtx, gameId)
+		gameRow, err = s.Queries.GetGame(egCtx, gameId)
 		if err != nil {
 			log.Printf("failed to get game: %v", err)
 			return status.Errorf(codes.Internal, "failed to get game for id: %d", gameId)
@@ -48,7 +48,7 @@ func (s *GrpcServer) UpdateGameTrans(ctx context.Context, gameId int64, updtGame
 	dbCtx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
-	tx, err := s.pool.Begin(dbCtx)
+	tx, err := s.Pool.Begin(dbCtx)
 	if err != nil {
 		log.Printf("failed to acquire a connection: %v", err)
 		return status.Errorf(codes.Internal, "an unexpected error occured")
@@ -60,7 +60,7 @@ func (s *GrpcServer) UpdateGameTrans(ctx context.Context, gameId int64, updtGame
 			log.Printf("failed to rollback UpdateGame and InsertStep transaction: %v", err)
 		}
 	}(tx, dbCtx)
-	qtx := s.queries.WithTx(tx)
+	qtx := s.Queries.WithTx(tx)
 
 	_, err = qtx.UpdateGame(dbCtx, updtGameParams)
 	if err != nil {

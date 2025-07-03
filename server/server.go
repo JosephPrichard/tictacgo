@@ -5,7 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"golang.org/x/crypto/bcrypt"
 	"log"
 	"time"
 
@@ -24,8 +25,8 @@ import (
 
 type GrpcServer struct {
 	pb.UnimplementedTicTacGoServiceServer
-	queries *db.Queries
-	pool    *pgxpool.Pool
+	Queries *db.Queries
+	Pool    *pgxpool.Pool
 }
 
 func (s *GrpcServer) Register(ctx context.Context, in *pb.CredentialsReq) (*pb.Player, error) {
@@ -33,15 +34,28 @@ func (s *GrpcServer) Register(ctx context.Context, in *pb.CredentialsReq) (*pb.P
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
 
-	params := db.InsertPlayerParams{
-		Username: in.Username,
-		Passwd:   in.Password,
+	hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	if hashErr != nil {
+		log.Printf("failed to generate hashed password: %v", hashErr)
+		return nil, status.Errorf(codes.Internal, "failed to generate hashed password from username: %s", in.Username)
 	}
 
-	row, err := s.queries.InsertPlayer(ctx, params)
-	if err != nil {
-		log.Printf("failed to insert player: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to insert player for params: %s", params)
+	params := db.InsertPlayerParams{
+		Username: in.Username,
+		Passwd:   string(hashedPassword),
+	}
+
+	row, playerErr := s.Queries.InsertPlayer(ctx, params)
+	if playerErr != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(playerErr, &pgErr) {
+			if pgErr.Code == "23505" {
+				log.Printf("player already exists: %v", pgErr)
+				return nil, status.Errorf(codes.AlreadyExists, "player already exists: %s", in.Username)
+			}
+		}
+		log.Printf("failed to insert player: %v", playerErr)
+		return nil, status.Errorf(codes.Internal, "failed to insert player for username: %s", in.Username)
 	}
 
 	player := pb.Player{
@@ -59,19 +73,18 @@ func (s *GrpcServer) Login(ctx context.Context, in *pb.CredentialsReq) (*pb.Logi
 		return nil, errors.New("expected input request to be provided, was nil")
 	}
 
-	verifyParams := db.VerifyPlayerParams{
-		Username: in.Username,
-		Passwd:   in.Password,
+	row, playerErr := s.Queries.GetAccountByName(ctx, in.Username)
+	if playerErr != nil {
+		return nil, status.Errorf(codes.PermissionDenied, "failed to get player for username: %+v", in.Username)
 	}
 
-	row, verifyErr := s.queries.VerifyPlayer(ctx, verifyParams)
-	if errors.Is(verifyErr, pgx.ErrNoRows) {
-		log.Printf("failed to authorize the user for username: %v", verifyParams.Username)
+	err := bcrypt.CompareHashAndPassword([]byte(row.Passwd), []byte(in.Password))
+	if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
 		return nil, status.Errorf(codes.PermissionDenied, "authorization credentials are invalid or missing")
 	}
-	if verifyErr != nil {
-		log.Printf("failed to verifyParams player: %v", verifyErr)
-		return nil, status.Errorf(codes.Internal, "failed to verifyParams player for params: %+v", verifyParams)
+	if err != nil {
+		log.Printf("failed to generate hashed password: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to generate hashed password from username: %s", in.Username)
 	}
 
 	token := uuid.New().String()
@@ -80,7 +93,7 @@ func (s *GrpcServer) Login(ctx context.Context, in *pb.CredentialsReq) (*pb.Logi
 		PlayerID: row.ID,
 	}
 
-	_, sessErr := s.queries.InsertSession(ctx, session)
+	_, sessErr := s.Queries.InsertSession(ctx, session)
 	if sessErr != nil {
 		log.Printf("failed to insert session: %v", sessErr)
 		return nil, status.Errorf(codes.Internal, "failed to insert session for params: %+v", session)
@@ -100,7 +113,7 @@ func (s *GrpcServer) GetPlayers(ctx context.Context, in *pb.GetPlayersReq) (*pb.
 		Limit: in.PerPage,
 	}
 
-	rows, err := s.queries.GetPlayers(ctx, params)
+	rows, err := s.Queries.GetPlayers(ctx, params)
 	if err != nil {
 		log.Printf("failed to get players: %v", err)
 		return nil, status.Errorf(codes.Internal, "failed to get players for params: %+v", params)
@@ -120,7 +133,7 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.
 	// get the session for the provided token
 	log.Printf("called CreateGame with token: %v", in.Token)
 
-	sessRow, err := s.queries.GetSession(ctx, in.Token)
+	sessRow, err := s.Queries.GetSession(ctx, in.Token)
 	if err != nil {
 		log.Printf("failed to retrieve session: %v", err)
 		return nil, status.Errorf(codes.PermissionDenied, "failed to retrieve session for token: %v", in.Token)
@@ -138,7 +151,7 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.
 		StartedOn:  pgtype.Timestamptz{Time: timeNow},
 	}
 
-	gameId, err := s.queries.InsertGame(ctx, params)
+	gameId, err := s.Queries.InsertGame(ctx, params)
 	if err != nil {
 		log.Printf("failed to insert game: %v", err)
 		return nil, status.Errorf(codes.Internal, "failed to insert game for params: %+v", params)
@@ -177,7 +190,7 @@ func (s *GrpcServer) GetGame(ctx context.Context, in *pb.GetGameReq) (*pb.Game, 
 
 	eg.Go(func() error {
 		var err error
-		gameRow, err = s.queries.GetGame(ctx, in.Id)
+		gameRow, err = s.Queries.GetGame(ctx, in.Id)
 		if err != nil {
 			log.Printf("failed to get game: %v", err)
 			return status.Errorf(codes.Internal, "failed to get games for id: %v", in.Id)
@@ -186,7 +199,7 @@ func (s *GrpcServer) GetGame(ctx context.Context, in *pb.GetGameReq) (*pb.Game, 
 	})
 	eg.Go(func() error {
 		var err error
-		stepRows, err = s.queries.GetGameSteps(ctx, in.Id)
+		stepRows, err = s.Queries.GetGameSteps(ctx, in.Id)
 		if err != nil {
 			log.Printf("failed to get steps: %v", err)
 			return status.Errorf(codes.Internal, "failed to get steps for id: %v", in.Id)
@@ -245,7 +258,7 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *pb.GetGamesReq) (*pb.Game
 	eg.Go(func() error {
 		log.Printf("fetching games for params: %+v", params)
 		var err error
-		gameRows, err = s.queries.GetGames(egCtx, params)
+		gameRows, err = s.Queries.GetGames(egCtx, params)
 		if err != nil {
 			log.Printf("failed to get games: %v", err)
 			return status.Errorf(codes.Internal, "failed to get games for params: %+v", params)
@@ -255,7 +268,7 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *pb.GetGamesReq) (*pb.Game
 	eg.Go(func() error {
 		var err error
 		log.Printf("fetching game steps for for ids: %+v", gameIds)
-		stepRows, err = s.queries.GetGamesSteps(egCtx, gameIds)
+		stepRows, err = s.Queries.GetGamesSteps(egCtx, gameIds)
 		if err != nil {
 			log.Printf("failed to get steps: %v", err)
 			return status.Errorf(codes.Internal, "failed to get steps for ids: %+v", gameIds)
@@ -279,7 +292,7 @@ func (s *GrpcServer) ListenSteps(in *pb.GetGameReq, stream grpc.ServerStreamingS
 
 	ticker := time.NewTicker(time.Second * 2)
 	for t := range ticker.C {
-		row, err := s.queries.GetLastStep(ctx, in.Id)
+		row, err := s.Queries.GetLastStep(ctx, in.Id)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -385,7 +398,7 @@ func (s *GrpcServer) WhoAmI(ctx context.Context, in *pb.AuthToken) (*pb.Player, 
 
 	log.Printf("called WhoAmI with token: %v", token)
 
-	sessRow, err := s.queries.GetSession(ctx, token)
+	sessRow, err := s.Queries.GetSession(ctx, token)
 	if err != nil {
 		log.Printf("failed to get session: %v", err)
 		return nil, status.Errorf(codes.Internal, "failed to get session for token: %s", token)

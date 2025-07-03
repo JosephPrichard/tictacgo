@@ -142,7 +142,7 @@ func serve(ctx context.Context, t *testing.T, pool *pgxpool.Pool) (pb.TicTacGoSe
 	buffer := 1024 * 1024
 	lis := bufconn.Listen(buffer)
 
-	server := &GrpcServer{queries: db.New(pool), pool: pool}
+	server := &GrpcServer{Queries: db.New(pool), Pool: pool}
 
 	baseServer := grpc.NewServer()
 	pb.RegisterTicTacGoServiceServer(baseServer, server)
@@ -196,11 +196,8 @@ func TestServer(t *testing.T) {
 		queries: queries,
 	}
 
-	t.Run("Register", func(t *testing.T) {
-		testRegister(t, args)
-	})
-	t.Run("Login", func(t *testing.T) {
-		testLogin(t, args)
+	t.Run("RegisterAndLogin", func(t *testing.T) {
+		testRegisterAndLogin(t, args)
 	})
 	t.Run("GetPlayers", func(t *testing.T) {
 		testGetPlayers(t, args)
@@ -222,49 +219,67 @@ func TestServer(t *testing.T) {
 	})
 }
 
-func testRegister(t *testing.T, args TestArgs) {
+func testRegisterAndLogin(t *testing.T, args TestArgs) {
 	seedTestData(args)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	defer cancel()
-
-	in := &pb.CredentialsReq{
-		Username: "user6",
-		Password: "password6",
+	type RegisterTest struct {
+		username string
+		password string
+		expId    int64
+		expCode  codes.Code
 	}
 
-	player, err := args.client.Register(ctx, in)
-	if err != nil {
-		t.Fatalf("failed to register: %v", err)
+	registerTests := []RegisterTest{
+		{username: "user6", password: "password123", expId: 6, expCode: 0},
+		{username: "user3", password: "password123", expCode: codes.AlreadyExists},
 	}
 
-	assert.Equal(t, int64(6), player.Id)
-	assert.Equal(t, "user6", player.Username)
+	for i, test := range registerTests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+			defer cancel()
 
-	dbPlayer, err := args.queries.GetPlayer(ctx, 6)
-	if err != nil {
-		t.Fatalf("failed to get game for assert: %v", err)
+			in := &pb.CredentialsReq{
+				Username: test.username,
+				Password: test.password,
+			}
+
+			player, err := args.client.Register(ctx, in)
+			if test.expCode == 0 {
+				assert.Nil(t, err)
+
+				assert.Equal(t, test.expId, player.Id)
+				assert.Equal(t, test.username, player.Username)
+
+				dbPlayer, err := args.queries.GetPlayer(ctx, 6)
+				if err != nil {
+					t.Fatalf("failed to get game for assert: %v", err)
+				}
+
+				assert.Equal(t, test.expId, dbPlayer.ID)
+				assert.Equal(t, test.username, dbPlayer.Username)
+			}
+			if test.expCode != 0 {
+				s, ok := status.FromError(err)
+				assert.True(t, ok)
+				assert.Equal(t, test.expCode, s.Code())
+			}
+		})
 	}
 
-	assert.Equal(t, int64(6), dbPlayer.ID)
-	assert.Equal(t, "user6", dbPlayer.Username)
-}
-
-func testLogin(t *testing.T, args TestArgs) {
-	seedTestData(args)
-
-	type Test struct {
+	type LoginTest struct {
 		username string
 		password string
 		expCode  codes.Code
 	}
 
-	tests := []Test{
-		{username: "user1", password: "password123", expCode: 0},
-		{username: "user1", password: "password-incorrect", expCode: codes.PermissionDenied},
+	loginTests := []LoginTest{
+		{username: "user6", password: "password123", expCode: 0},
+		{username: "user6", password: "password-incorrect", expCode: codes.PermissionDenied},
+		{username: "user10", password: "password123", expCode: codes.PermissionDenied},
 	}
 
-	for i, test := range tests {
+	for i, test := range loginTests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()

@@ -12,6 +12,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getAccountByName = `-- name: GetAccountByName :one
+SELECT id, username, passwd FROM player_accounts WHERE UPPER(username) = UPPER($1)
+`
+
+type GetAccountByNameRow struct {
+	ID       int64
+	Username string
+	Passwd   string
+}
+
+func (q *Queries) GetAccountByName(ctx context.Context, upper interface{}) (GetAccountByNameRow, error) {
+	row := q.db.QueryRow(ctx, getAccountByName, upper)
+	var i GetAccountByNameRow
+	err := row.Scan(&i.ID, &i.Username, &i.Passwd)
+	return i, err
+}
+
 const getGame = `-- name: GetGame :one
 SELECT
     g.id,
@@ -417,25 +434,4 @@ func (q *Queries) UpdateGame(ctx context.Context, arg UpdateGameParams) (pgconn.
 		arg.Result,
 		arg.ID,
 	)
-}
-
-const verifyPlayer = `-- name: VerifyPlayer :one
-SELECT id, username FROM player_accounts WHERE username = $1 AND passwd = $2
-`
-
-type VerifyPlayerParams struct {
-	Username string
-	Passwd   string
-}
-
-type VerifyPlayerRow struct {
-	ID       int64
-	Username string
-}
-
-func (q *Queries) VerifyPlayer(ctx context.Context, arg VerifyPlayerParams) (VerifyPlayerRow, error) {
-	row := q.db.QueryRow(ctx, verifyPlayer, arg.Username, arg.Passwd)
-	var i VerifyPlayerRow
-	err := row.Scan(&i.ID, &i.Username)
-	return i, err
 }

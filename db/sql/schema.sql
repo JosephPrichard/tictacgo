@@ -35,3 +35,4 @@ CREATE TABLE game_steps (
 );
 
 CREATE INDEX player_sessions_id ON player_sessions(player_id);
+CREATE UNIQUE INDEX player_accounts_names ON player_accounts(UPPER(username));
