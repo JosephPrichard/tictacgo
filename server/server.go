@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/grpc/metadata"
 	"log"
 	"time"
 
@@ -29,9 +30,32 @@ type GrpcServer struct {
 	Pool    *pgxpool.Pool
 }
 
+type SideChannels struct {
+	Authorization string
+}
+
+func GetSideChannelInfo(ctx context.Context) (SideChannels, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return SideChannels{}, status.Error(codes.Internal, "failed to get metadata from incoming context")
+	}
+	authorization := md["authorization"]
+	if len(authorization) != 1 {
+		log.Printf("expected authorization metadata length 1, got %v", authorization)
+		return SideChannels{}, status.Error(codes.Internal, "expected metadata 'authorization' to have one value")
+	}
+	return SideChannels{Authorization: authorization[0]}, nil
+}
+
 func (s *GrpcServer) Register(ctx context.Context, in *pb.CredentialsReq) (*pb.Player, error) {
 	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
+		return nil, status.Error(codes.Internal, "expected input request to be provided, was nil")
+	}
+
+	err := ValidateRegistration(in)
+	if err != nil {
+		log.Printf("failed to validate registration %v: %v", in, err)
+		return nil, err
 	}
 
 	hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
@@ -70,7 +94,7 @@ func (s *GrpcServer) Register(ctx context.Context, in *pb.CredentialsReq) (*pb.P
 
 func (s *GrpcServer) Login(ctx context.Context, in *pb.CredentialsReq) (*pb.LoginResp, error) {
 	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
+		return nil, status.Error(codes.Internal, "expected input request to be provided, was nil")
 	}
 
 	row, playerErr := s.Queries.GetAccountByName(ctx, in.Username)
@@ -105,7 +129,7 @@ func (s *GrpcServer) Login(ctx context.Context, in *pb.CredentialsReq) (*pb.Logi
 
 func (s *GrpcServer) GetPlayers(ctx context.Context, in *pb.GetPlayersReq) (*pb.Players, error) {
 	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
+		return nil, status.Error(codes.Internal, "expected input request to be provided, was nil")
 	}
 
 	params := db.GetPlayersParams{
@@ -127,16 +151,19 @@ func (s *GrpcServer) GetPlayers(ctx context.Context, in *pb.GetPlayersReq) (*pb.
 
 func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.Game, error) {
 	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
+		return nil, status.Error(codes.Internal, "expected input request to be provided, was nil")
 	}
 
-	// get the session for the provided token
-	log.Printf("called CreateGame with token: %v", in.Token)
+	md, err := GetSideChannelInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("called CreateGame with token: %v", md.Authorization)
 
-	sessRow, err := s.Queries.GetSession(ctx, in.Token)
+	sessRow, err := s.Queries.GetSession(ctx, md.Authorization)
 	if err != nil {
 		log.Printf("failed to retrieve session: %v", err)
-		return nil, status.Errorf(codes.PermissionDenied, "failed to retrieve session for token: %v", in.Token)
+		return nil, status.Errorf(codes.PermissionDenied, "failed to retrieve session for token: %v", md.Authorization)
 	}
 
 	// insert the newly constructed game
@@ -147,8 +174,8 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.
 		XPlayer:    sessRow.ID,
 		BoardState: tictactoe.BoardToString(board),
 		XTurn:      pgtype.Bool{Bool: turn, Valid: true},
-		UpdatedOn:  pgtype.Timestamptz{Time: timeNow},
-		StartedOn:  pgtype.Timestamptz{Time: timeNow},
+		UpdatedOn:  pgtype.Timestamptz{Time: timeNow, Valid: true},
+		StartedOn:  pgtype.Timestamptz{Time: timeNow, Valid: true},
 	}
 
 	gameId, err := s.Queries.InsertGame(ctx, params)
@@ -178,7 +205,7 @@ func (s *GrpcServer) CreateGame(ctx context.Context, in *pb.CreateGameReq) (*pb.
 
 func (s *GrpcServer) GetGame(ctx context.Context, in *pb.GetGameReq) (*pb.Game, error) {
 	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
+		return nil, status.Error(codes.Internal, "expected input request to be provided, was nil")
 	}
 
 	// fetch game and steps from the database at the same time
@@ -189,21 +216,21 @@ func (s *GrpcServer) GetGame(ctx context.Context, in *pb.GetGameReq) (*pb.Game, 
 	var stepRows []db.GameStep
 
 	eg.Go(func() error {
-		var err error
-		gameRow, err = s.Queries.GetGame(ctx, in.Id)
+		row, err := s.Queries.GetGame(ctx, in.Id)
 		if err != nil {
 			log.Printf("failed to get game: %v", err)
-			return status.Errorf(codes.Internal, "failed to get games for id: %v", in.Id)
+			return status.Errorf(codes.NotFound, "failed to get games for id: %v", in.Id)
 		}
+		gameRow = row
 		return nil
 	})
 	eg.Go(func() error {
-		var err error
-		stepRows, err = s.Queries.GetGameSteps(ctx, in.Id)
+		rows, err := s.Queries.GetGameSteps(ctx, in.Id)
 		if err != nil {
 			log.Printf("failed to get steps: %v", err)
-			return status.Errorf(codes.Internal, "failed to get steps for id: %v", in.Id)
+			return status.Errorf(codes.NotFound, "failed to get steps for id: %v", in.Id)
 		}
+		stepRows = rows
 		return nil
 	})
 
@@ -220,7 +247,7 @@ func (s *GrpcServer) GetGame(ctx context.Context, in *pb.GetGameReq) (*pb.Game, 
 
 func (s *GrpcServer) GetGames(ctx context.Context, in *pb.GetGamesReq) (*pb.Games, error) {
 	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
+		return nil, status.Error(codes.Internal, "expected input request to be provided, was nil")
 	}
 
 	// prepare arguments for fetching the games from the database
@@ -287,7 +314,7 @@ func (s *GrpcServer) GetGames(ctx context.Context, in *pb.GetGamesReq) (*pb.Game
 	return &pb.Games{Games: games}, nil
 }
 
-func (s *GrpcServer) ListenSteps(in *pb.GetGameReq, stream grpc.ServerStreamingServer[pb.Step]) error {
+func (s *GrpcServer) ListenSteps(in *pb.ListenStepsReq, stream grpc.ServerStreamingServer[pb.Step]) error {
 	ctx := stream.Context()
 
 	ticker := time.NewTicker(time.Second * 2)
@@ -324,61 +351,46 @@ func (s *GrpcServer) ListenSteps(in *pb.GetGameReq, stream grpc.ServerStreamingS
 
 func (s *GrpcServer) MakeMove(ctx context.Context, in *pb.MakeMoveReq) (*pb.Game, error) {
 	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
+		return nil, status.Error(codes.Internal, "expected input request to be provided, was nil")
 	}
 
-	sessRow, gameRow, err := s.GetGameAndSession(ctx, in.Token, in.GameId)
+	md, err := GetSideChannelInfo(ctx)
 	if err != nil {
+		log.Printf("failed to get side channel info for move req %v: %v", in, err)
+		return nil, err
+	}
+	sessRow, gameRow, err := s.GetGameAndSession(ctx, md.Authorization, in.GameId)
+	if err != nil {
+		log.Printf("failed to get game and session for move req %v: %v", in, err)
+		return nil, err
+	}
+	err = ValidateMakeMove(gameRow, sessRow.ID)
+	if err != nil {
+		log.Printf("failed validate move state for move req %v: %v", in, err)
+		return nil, err
+	}
+	result, err := MakeMove(gameRow, in.Row, in.Col)
+	if err != nil {
+		log.Printf("failed to make the move for move req %v: %v", in, err)
 		return nil, err
 	}
 
-	if !gameRow.OPlayer.Valid {
-		log.Printf("cannot make move on game: %d, wait for an opponent to join as 'O'", in.GameId)
-		return nil, status.Errorf(codes.PermissionDenied, "cannot make move on game: %d, wait for an opponent to join as 'O'", in.GameId)
-	}
-	if gameRow.Result != tictactoe.Playing {
-		log.Printf("cannot make move on game: %d, game is not in play", in.GameId)
-		return nil, status.Errorf(codes.PermissionDenied, "cannot make move on game: %d, game is not in play", in.GameId)
-	}
-	if gameRow.XTurn.Bool && gameRow.XPlayer != sessRow.ID || !gameRow.XTurn.Bool && (gameRow.OPlayer.Int64 != sessRow.ID || !gameRow.OPlayer.Valid) {
-		log.Printf("cannot make move on game: %d, it isn't player's turn, expected: %d, received: %d", in.GameId, gameRow.XPlayer, sessRow.ID)
-		return nil, status.Errorf(codes.PermissionDenied, "cannot make move on game: %d, it isn't player's turn, expected: %d, received: %d", in.GameId, gameRow.XPlayer, sessRow.ID)
-	}
-
-	var tileValue uint8
-	if gameRow.XTurn.Bool {
-		tileValue = tictactoe.X
-	} else {
-		tileValue = tictactoe.O
-	}
-	board, err := tictactoe.ParseBoard(gameRow.BoardState)
-	if err != nil {
-		log.Printf("error converting board from string: %v", err)
-		return nil, status.Error(codes.Internal, "error converting board from string")
-	}
-	board, turn, err := tictactoe.MoveBoard(board, gameRow.XTurn.Bool, in.Row, in.Col, tileValue)
-	if err != nil {
-		log.Printf("cannot make move on game: %d, %s", in.GameId, err.Error())
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	result := tictactoe.GetResult(board)
-
-	log.Printf("made move on game: %d, board: %v", in.GameId, tictactoe.FmtBoard(board))
+	log.Printf("made move on game: %d, board: %v", in.GameId, tictactoe.FmtBoard(result.Board))
 
 	updtGameParams := db.UpdateGameParams{
 		ID:         gameRow.ID,
-		BoardState: tictactoe.BoardToString(board),
-		XTurn:      pgtype.Bool{Bool: turn, Valid: true},
+		BoardState: tictactoe.BoardToString(result.Board),
+		XTurn:      pgtype.Bool{Bool: result.Turn, Valid: true},
 		UpdatedOn:  pgtype.Timestamptz(pgtype.Timestamp{Time: time.Now(), Valid: true}),
-		Result:     result,
+		Result:     result.Result,
 	}
 	instStepParams := db.InsertStepParams{
 		GameID:  gameRow.ID,
 		MoveRow: in.Row,
 		MoveCol: in.Col,
 		Board:   gameRow.BoardState,
-		XTurn:   turn,
-		Result:  result,
+		XTurn:   result.Turn,
+		Result:  result.Result,
 	}
 	err = s.UpdateGameTrans(ctx, in.GameId, updtGameParams, instStepParams)
 	if err != nil {
@@ -389,19 +401,22 @@ func (s *GrpcServer) MakeMove(ctx context.Context, in *pb.MakeMoveReq) (*pb.Game
 	return game, nil
 }
 
-func (s *GrpcServer) WhoAmI(ctx context.Context, in *pb.AuthToken) (*pb.Player, error) {
+func (s *GrpcServer) WhoAmI(ctx context.Context, in *pb.WhoAmIReq) (*pb.Player, error) {
 	if in == nil {
-		return nil, errors.New("expected input request to be provided, was nil")
+		return nil, status.Error(codes.Internal, "expected input request to be provided, was nil")
 	}
 
-	token := in.GetToken()
+	md, err := GetSideChannelInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	log.Printf("called WhoAmI with token: %v", token)
+	log.Printf("called WhoAmI with token: %v", md.Authorization)
 
-	sessRow, err := s.Queries.GetSession(ctx, token)
+	sessRow, err := s.Queries.GetSession(ctx, md.Authorization)
 	if err != nil {
 		log.Printf("failed to get session: %v", err)
-		return nil, status.Errorf(codes.Internal, "failed to get session for token: %s", token)
+		return nil, status.Errorf(codes.Internal, "failed to get session for token: %s", md.Authorization)
 	}
 
 	player := pb.Player{

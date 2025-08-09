@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -211,11 +212,11 @@ func TestServer(t *testing.T) {
 	t.Run("GetGames", func(t *testing.T) {
 		testGetGames(t, args)
 	})
-	t.Run("ListenSteps", func(t *testing.T) {
-		testListenSteps(t, args)
-	})
 	t.Run("MakeMove", func(t *testing.T) {
 		testMakeMove(t, args)
+	})
+	t.Run("ListenSteps", func(t *testing.T) {
+		testListenSteps(t, args)
 	})
 }
 
@@ -230,8 +231,20 @@ func testRegisterAndLogin(t *testing.T, args TestArgs) {
 	}
 
 	registerTests := []RegisterTest{
-		{username: "user6", password: "password123", expId: 6, expCode: 0},
-		{username: "user3", password: "password123", expCode: codes.AlreadyExists},
+		{
+			username: "user6",
+			password: "password123",
+			expId:    6,
+		},
+		{username: "user3",
+			password: "password123",
+			expCode:  codes.AlreadyExists,
+		},
+		{
+			username: "use",
+			password: "p",
+			expCode:  codes.InvalidArgument,
+		},
 	}
 
 	for i, test := range registerTests {
@@ -354,7 +367,8 @@ func testCreateGame(t *testing.T, args TestArgs) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
-	in := &pb.CreateGameReq{Token: "User1Token"}
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("authorization", "User1Token"))
+	in := &pb.CreateGameReq{}
 
 	game, err := args.client.CreateGame(ctx, in)
 	if err != nil {
@@ -372,7 +386,7 @@ func testCreateGame(t *testing.T, args TestArgs) {
 		Result:     tictactoe.Playing,
 		Steps:      []*pb.Step{},
 	}
-	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(expectedGame, "updated_on", "started_on"))
+	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(expectedGame, "updatedOn", "startedOn"))
 	assert.Equal(t, "", diff)
 
 	dbGame, err := args.queries.GetGame(ctx, 5)
@@ -391,7 +405,7 @@ func testCreateGame(t *testing.T, args TestArgs) {
 		OPlayerName: pgtype.Text{String: "", Valid: false},
 	}
 
-	diff = cmp.Diff(expectedDbGame, dbGame, cmpopts.IgnoreFields(dbGame, "UpdatedOn", "StartedOn"))
+	diff = cmp.Diff(expectedDbGame, dbGame, cmpopts.IgnoreFields(dbGame, "updatedOn", "startedOn"))
 	assert.Equal(t, "", diff)
 }
 
@@ -410,7 +424,7 @@ func testGetGame(t *testing.T, args TestArgs) {
 
 	expectedGame := &testPbGames[0]
 
-	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
+	diff := cmp.Diff(expectedGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updatedOn", "startedOn"))
 	assert.Equal(t, "", diff)
 }
 
@@ -445,7 +459,7 @@ func testGetGames(t *testing.T, args TestArgs) {
 
 			expectedGames := &pb.Games{Games: test.expGames}
 
-			diff := cmp.Diff(expectedGames, games, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
+			diff := cmp.Diff(expectedGames, games, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updatedOn", "startedOn"))
 			assert.Equal(t, "", diff)
 		})
 	}
@@ -477,7 +491,7 @@ func testListenSteps(t *testing.T, args TestArgs) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 
-			in := &pb.GetGameReq{Id: test.id}
+			in := &pb.ListenStepsReq{Id: test.id}
 
 			stream, err := args.client.ListenSteps(ctx, in)
 			if err != nil {
@@ -507,6 +521,7 @@ func testMakeMove(t *testing.T, args TestArgs) {
 	seedTestData(args)
 
 	type Test struct {
+		md        metadata.MD
 		in        *pb.MakeMoveReq
 		expGame   *pb.Game
 		expDbGame *db.GetGameRow
@@ -515,27 +530,33 @@ func testMakeMove(t *testing.T, args TestArgs) {
 
 	tests := []Test{
 		{
-			in:      &pb.MakeMoveReq{GameId: 1, Row: 0, Col: 0, Token: "User1Token"}, // illegal move
+			md:      metadata.Pairs("authorization", "User1Token"),
+			in:      &pb.MakeMoveReq{GameId: 1, Row: 0, Col: 0}, // illegal move
 			expCode: codes.InvalidArgument,
 		},
 		{
-			in:      &pb.MakeMoveReq{GameId: 1, Row: 0, Col: 0, Token: "InvalidToken"}, // invalid token
+			md:      metadata.Pairs("authorization", "InvalidToken"),
+			in:      &pb.MakeMoveReq{GameId: 1, Row: 0, Col: 0}, // invalid token
 			expCode: codes.PermissionDenied,
 		},
 		{
-			in:      &pb.MakeMoveReq{GameId: 2, Row: 0, Col: 0, Token: "User1Token"}, // not player's turn
+			md:      metadata.Pairs("authorization", "User1Token"),
+			in:      &pb.MakeMoveReq{GameId: 2, Row: 0, Col: 0}, // not player's turn
 			expCode: codes.PermissionDenied,
 		},
 		{
-			in:      &pb.MakeMoveReq{GameId: 3, Row: 0, Col: 0, Token: "User1Token"}, // cannot make move on game not in play
+			md:      metadata.Pairs("authorization", "User1Token"),
+			in:      &pb.MakeMoveReq{GameId: 3, Row: 0, Col: 0}, // cannot make move on game not in play
 			expCode: codes.PermissionDenied,
 		},
 		{
-			in:      &pb.MakeMoveReq{GameId: 4, Row: 0, Col: 0, Token: "User1Token"}, // cannot make move on game that is not started
+			md:      metadata.Pairs("authorization", "User1Token"),
+			in:      &pb.MakeMoveReq{GameId: 4, Row: 0, Col: 0}, // cannot make move on game that is not started
 			expCode: codes.PermissionDenied,
 		},
 		{
-			in: &pb.MakeMoveReq{GameId: 1, Row: 0, Col: 1, Token: "User1Token"}, // success case
+			md: metadata.Pairs("authorization", "User1Token"),
+			in: &pb.MakeMoveReq{GameId: 1, Row: 0, Col: 1}, // success case
 			expGame: &pb.Game{
 				Id:         1,
 				XPlayer:    &pb.Player{Id: 1, Username: "user1"},
@@ -563,11 +584,13 @@ func testMakeMove(t *testing.T, args TestArgs) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
 
+			ctx = metadata.NewOutgoingContext(ctx, test.md)
+
 			game, err := args.client.MakeMove(ctx, test.in)
 			if test.expCode == 0 {
 				assert.Nil(t, err)
 
-				diff := cmp.Diff(test.expGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updated_on", "started_on"))
+				diff := cmp.Diff(test.expGame, game, protocmp.Transform(), protocmp.IgnoreFields(&pb.Game{}, "updatedOn", "startedOn"))
 				assert.Equal(t, "", diff)
 			}
 			if test.expCode != 0 {
@@ -575,7 +598,6 @@ func testMakeMove(t *testing.T, args TestArgs) {
 				assert.True(t, ok)
 				assert.Equal(t, test.expCode, s.Code())
 			}
-
 			if test.expDbGame != nil {
 				dbGame, err := args.queries.GetGame(ctx, test.in.GameId)
 				if err != nil {

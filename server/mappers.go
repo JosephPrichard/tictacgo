@@ -3,9 +3,8 @@ package server
 import (
 	"TicTacGo/db"
 	"TicTacGo/pb"
-	"strings"
-
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"strings"
 )
 
 func MapGetGame(gameRow db.GetGameRow, stepRows []db.GameStep) *pb.Game {
@@ -31,8 +30,8 @@ func MapGetGame(gameRow db.GetGameRow, stepRows []db.GameStep) *pb.Game {
 		OPlayer:    secondPlayer,
 		BoardState: gameRow.BoardState,
 		XTurn:      gameRow.XTurn.Bool,
-		UpdatedOn:  &timestamppb.Timestamp{Seconds: int64(gameRow.UpdatedOn.Time.Second())},
-		StartedOn:  &timestamppb.Timestamp{Seconds: int64(gameRow.StartedOn.Time.Second())},
+		UpdatedOn:  &timestamppb.Timestamp{Seconds: gameRow.UpdatedOn.Time.Unix()},
+		StartedOn:  &timestamppb.Timestamp{Seconds: gameRow.StartedOn.Time.Unix()},
 		Result:     gameRow.Result,
 		Steps:      steps,
 	}

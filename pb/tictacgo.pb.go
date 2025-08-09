@@ -133,8 +133,8 @@ type Game struct {
 	OPlayer       *Player                `protobuf:"bytes,3,opt,name=oPlayer,proto3" json:"oPlayer,omitempty"`
 	BoardState    string                 `protobuf:"bytes,4,opt,name=boardState,proto3" json:"boardState,omitempty"`
 	XTurn         bool                   `protobuf:"varint,5,opt,name=xTurn,proto3" json:"xTurn,omitempty"`
-	UpdatedOn     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_on,json=updatedOn,proto3" json:"updated_on,omitempty"`
-	StartedOn     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=started_on,json=startedOn,proto3" json:"started_on,omitempty"`
+	UpdatedOn     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updatedOn,proto3" json:"updatedOn,omitempty"`
+	StartedOn     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=startedOn,proto3" json:"startedOn,omitempty"`
 	Result        int32                  `protobuf:"varint,8,opt,name=result,proto3" json:"result,omitempty"`
 	Steps         []*Step                `protobuf:"bytes,9,rep,name=steps,proto3" json:"steps,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -370,50 +370,6 @@ func (x *Step) GetResult() int32 {
 	return 0
 }
 
-type AuthToken struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AuthToken) Reset() {
-	*x = AuthToken{}
-	mi := &file_pb_tictacgo_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AuthToken) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AuthToken) ProtoMessage() {}
-
-func (x *AuthToken) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_tictacgo_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AuthToken.ProtoReflect.Descriptor instead.
-func (*AuthToken) Descriptor() ([]byte, []int) {
-	return file_pb_tictacgo_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *AuthToken) GetToken() string {
-	if x != nil {
-		return x.Token
-	}
-	return ""
-}
-
 type GetGamesReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
@@ -426,7 +382,7 @@ type GetGamesReq struct {
 
 func (x *GetGamesReq) Reset() {
 	*x = GetGamesReq{}
-	mi := &file_pb_tictacgo_proto_msgTypes[6]
+	mi := &file_pb_tictacgo_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -438,7 +394,7 @@ func (x *GetGamesReq) String() string {
 func (*GetGamesReq) ProtoMessage() {}
 
 func (x *GetGamesReq) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_tictacgo_proto_msgTypes[6]
+	mi := &file_pb_tictacgo_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -451,7 +407,7 @@ func (x *GetGamesReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGamesReq.ProtoReflect.Descriptor instead.
 func (*GetGamesReq) Descriptor() ([]byte, []int) {
-	return file_pb_tictacgo_proto_rawDescGZIP(), []int{6}
+	return file_pb_tictacgo_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetGamesReq) GetPage() int32 {
@@ -492,7 +448,7 @@ type GetPlayersReq struct {
 
 func (x *GetPlayersReq) Reset() {
 	*x = GetPlayersReq{}
-	mi := &file_pb_tictacgo_proto_msgTypes[7]
+	mi := &file_pb_tictacgo_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -504,7 +460,7 @@ func (x *GetPlayersReq) String() string {
 func (*GetPlayersReq) ProtoMessage() {}
 
 func (x *GetPlayersReq) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_tictacgo_proto_msgTypes[7]
+	mi := &file_pb_tictacgo_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -517,7 +473,7 @@ func (x *GetPlayersReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayersReq.ProtoReflect.Descriptor instead.
 func (*GetPlayersReq) Descriptor() ([]byte, []int) {
-	return file_pb_tictacgo_proto_rawDescGZIP(), []int{7}
+	return file_pb_tictacgo_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetPlayersReq) GetPage() int32 {
@@ -543,7 +499,7 @@ type GetGameReq struct {
 
 func (x *GetGameReq) Reset() {
 	*x = GetGameReq{}
-	mi := &file_pb_tictacgo_proto_msgTypes[8]
+	mi := &file_pb_tictacgo_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -555,7 +511,7 @@ func (x *GetGameReq) String() string {
 func (*GetGameReq) ProtoMessage() {}
 
 func (x *GetGameReq) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_tictacgo_proto_msgTypes[8]
+	mi := &file_pb_tictacgo_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -568,7 +524,7 @@ func (x *GetGameReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGameReq.ProtoReflect.Descriptor instead.
 func (*GetGameReq) Descriptor() ([]byte, []int) {
-	return file_pb_tictacgo_proto_rawDescGZIP(), []int{8}
+	return file_pb_tictacgo_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetGameReq) GetId() int64 {
@@ -580,14 +536,13 @@ func (x *GetGameReq) GetId() int64 {
 
 type CreateGameReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateGameReq) Reset() {
 	*x = CreateGameReq{}
-	mi := &file_pb_tictacgo_proto_msgTypes[9]
+	mi := &file_pb_tictacgo_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -599,7 +554,7 @@ func (x *CreateGameReq) String() string {
 func (*CreateGameReq) ProtoMessage() {}
 
 func (x *CreateGameReq) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_tictacgo_proto_msgTypes[9]
+	mi := &file_pb_tictacgo_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -612,29 +567,21 @@ func (x *CreateGameReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateGameReq.ProtoReflect.Descriptor instead.
 func (*CreateGameReq) Descriptor() ([]byte, []int) {
-	return file_pb_tictacgo_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *CreateGameReq) GetToken() string {
-	if x != nil {
-		return x.Token
-	}
-	return ""
+	return file_pb_tictacgo_proto_rawDescGZIP(), []int{8}
 }
 
 type MakeMoveReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	Row           int32                  `protobuf:"varint,2,opt,name=row,proto3" json:"row,omitempty"`
-	Col           int32                  `protobuf:"varint,3,opt,name=col,proto3" json:"col,omitempty"`
-	GameId        int64                  `protobuf:"varint,4,opt,name=gameId,proto3" json:"gameId,omitempty"`
+	Row           int32                  `protobuf:"varint,1,opt,name=row,proto3" json:"row,omitempty"`
+	Col           int32                  `protobuf:"varint,2,opt,name=col,proto3" json:"col,omitempty"`
+	GameId        int64                  `protobuf:"varint,3,opt,name=gameId,proto3" json:"gameId,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MakeMoveReq) Reset() {
 	*x = MakeMoveReq{}
-	mi := &file_pb_tictacgo_proto_msgTypes[10]
+	mi := &file_pb_tictacgo_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -646,7 +593,7 @@ func (x *MakeMoveReq) String() string {
 func (*MakeMoveReq) ProtoMessage() {}
 
 func (x *MakeMoveReq) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_tictacgo_proto_msgTypes[10]
+	mi := &file_pb_tictacgo_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -659,14 +606,7 @@ func (x *MakeMoveReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MakeMoveReq.ProtoReflect.Descriptor instead.
 func (*MakeMoveReq) Descriptor() ([]byte, []int) {
-	return file_pb_tictacgo_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *MakeMoveReq) GetToken() string {
-	if x != nil {
-		return x.Token
-	}
-	return ""
+	return file_pb_tictacgo_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *MakeMoveReq) GetRow() int32 {
@@ -700,7 +640,7 @@ type CredentialsReq struct {
 
 func (x *CredentialsReq) Reset() {
 	*x = CredentialsReq{}
-	mi := &file_pb_tictacgo_proto_msgTypes[11]
+	mi := &file_pb_tictacgo_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -712,7 +652,7 @@ func (x *CredentialsReq) String() string {
 func (*CredentialsReq) ProtoMessage() {}
 
 func (x *CredentialsReq) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_tictacgo_proto_msgTypes[11]
+	mi := &file_pb_tictacgo_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -725,7 +665,7 @@ func (x *CredentialsReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CredentialsReq.ProtoReflect.Descriptor instead.
 func (*CredentialsReq) Descriptor() ([]byte, []int) {
-	return file_pb_tictacgo_proto_rawDescGZIP(), []int{11}
+	return file_pb_tictacgo_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CredentialsReq) GetUsername() string {
@@ -752,7 +692,7 @@ type LoginResp struct {
 
 func (x *LoginResp) Reset() {
 	*x = LoginResp{}
-	mi := &file_pb_tictacgo_proto_msgTypes[12]
+	mi := &file_pb_tictacgo_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -764,7 +704,7 @@ func (x *LoginResp) String() string {
 func (*LoginResp) ProtoMessage() {}
 
 func (x *LoginResp) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_tictacgo_proto_msgTypes[12]
+	mi := &file_pb_tictacgo_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -777,7 +717,7 @@ func (x *LoginResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginResp.ProtoReflect.Descriptor instead.
 func (*LoginResp) Descriptor() ([]byte, []int) {
-	return file_pb_tictacgo_proto_rawDescGZIP(), []int{12}
+	return file_pb_tictacgo_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *LoginResp) GetToken() string {
@@ -794,6 +734,86 @@ func (x *LoginResp) GetPlayer() *Player {
 	return nil
 }
 
+type WhoAmIReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WhoAmIReq) Reset() {
+	*x = WhoAmIReq{}
+	mi := &file_pb_tictacgo_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WhoAmIReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WhoAmIReq) ProtoMessage() {}
+
+func (x *WhoAmIReq) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_tictacgo_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WhoAmIReq.ProtoReflect.Descriptor instead.
+func (*WhoAmIReq) Descriptor() ([]byte, []int) {
+	return file_pb_tictacgo_proto_rawDescGZIP(), []int{12}
+}
+
+type ListenStepsReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListenStepsReq) Reset() {
+	*x = ListenStepsReq{}
+	mi := &file_pb_tictacgo_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListenStepsReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListenStepsReq) ProtoMessage() {}
+
+func (x *ListenStepsReq) ProtoReflect() protoreflect.Message {
+	mi := &file_pb_tictacgo_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListenStepsReq.ProtoReflect.Descriptor instead.
+func (*ListenStepsReq) Descriptor() ([]byte, []int) {
+	return file_pb_tictacgo_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListenStepsReq) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
 var File_pb_tictacgo_proto protoreflect.FileDescriptor
 
 const file_pb_tictacgo_proto_rawDesc = "" +
@@ -804,7 +824,7 @@ const file_pb_tictacgo_proto_rawDesc = "" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x10\n" +
 	"\x03cnt\x18\x03 \x01(\x05R\x03cnt\"4\n" +
 	"\aPlayers\x12)\n" +
-	"\aplayers\x18\x01 \x03(\v2\x0f.service.PlayerR\aplayers\"\xd5\x02\n" +
+	"\aplayers\x18\x01 \x03(\v2\x0f.service.PlayerR\aplayers\"\xd3\x02\n" +
 	"\x04Game\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12)\n" +
 	"\axPlayer\x18\x02 \x01(\v2\x0f.service.PlayerR\axPlayer\x12)\n" +
@@ -812,11 +832,9 @@ const file_pb_tictacgo_proto_rawDesc = "" +
 	"\n" +
 	"boardState\x18\x04 \x01(\tR\n" +
 	"boardState\x12\x14\n" +
-	"\x05xTurn\x18\x05 \x01(\bR\x05xTurn\x129\n" +
-	"\n" +
-	"updated_on\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedOn\x129\n" +
-	"\n" +
-	"started_on\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tstartedOn\x12\x16\n" +
+	"\x05xTurn\x18\x05 \x01(\bR\x05xTurn\x128\n" +
+	"\tupdatedOn\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedOn\x128\n" +
+	"\tstartedOn\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tstartedOn\x12\x16\n" +
 	"\x06result\x18\b \x01(\x05R\x06result\x12#\n" +
 	"\x05steps\x18\t \x03(\v2\r.service.StepR\x05steps\",\n" +
 	"\x05Games\x12#\n" +
@@ -828,9 +846,7 @@ const file_pb_tictacgo_proto_rawDesc = "" +
 	"\amoveCol\x18\x04 \x01(\x05R\amoveCol\x12\x14\n" +
 	"\x05board\x18\x05 \x01(\tR\x05board\x12\x14\n" +
 	"\x05xTurn\x18\x06 \x01(\bR\x05xTurn\x12\x16\n" +
-	"\x06result\x18\a \x01(\x05R\x06result\"!\n" +
-	"\tAuthToken\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"\x91\x01\n" +
+	"\x06result\x18\a \x01(\x05R\x06result\"\x91\x01\n" +
 	"\vGetGamesReq\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12)\n" +
 	"\axPlayer\x18\x02 \x01(\v2\x0f.service.PlayerR\axPlayer\x12)\n" +
@@ -841,20 +857,21 @@ const file_pb_tictacgo_proto_rawDesc = "" +
 	"\aperPage\x18\x02 \x01(\x05R\aperPage\"\x1c\n" +
 	"\n" +
 	"GetGameReq\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"%\n" +
-	"\rCreateGameReq\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"_\n" +
-	"\vMakeMoveReq\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\x12\x10\n" +
-	"\x03row\x18\x02 \x01(\x05R\x03row\x12\x10\n" +
-	"\x03col\x18\x03 \x01(\x05R\x03col\x12\x16\n" +
-	"\x06gameId\x18\x04 \x01(\x03R\x06gameId\"H\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"\x0f\n" +
+	"\rCreateGameReq\"I\n" +
+	"\vMakeMoveReq\x12\x10\n" +
+	"\x03row\x18\x01 \x01(\x05R\x03row\x12\x10\n" +
+	"\x03col\x18\x02 \x01(\x05R\x03col\x12\x16\n" +
+	"\x06gameId\x18\x03 \x01(\x03R\x06gameId\"H\n" +
 	"\x0eCredentialsReq\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\"J\n" +
 	"\tLoginResp\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12'\n" +
-	"\x06Player\x18\x02 \x01(\v2\x0f.service.PlayerR\x06Player2\xf2\x03\n" +
+	"\x06Player\x18\x02 \x01(\v2\x0f.service.PlayerR\x06Player\"\v\n" +
+	"\tWhoAmIReq\" \n" +
+	"\x0eListenStepsReq\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id2\xf6\x03\n" +
 	"\x0fTicTacGoService\x126\n" +
 	"\bRegister\x12\x17.service.CredentialsReq\x1a\x0f.service.Player\"\x00\x126\n" +
 	"\x05Login\x12\x17.service.CredentialsReq\x1a\x12.service.LoginResp\"\x00\x128\n" +
@@ -864,9 +881,9 @@ const file_pb_tictacgo_proto_rawDesc = "" +
 	"CreateGame\x12\x16.service.CreateGameReq\x1a\r.service.Game\"\x00\x122\n" +
 	"\bGetGames\x12\x14.service.GetGamesReq\x1a\x0e.service.Games\"\x00\x12/\n" +
 	"\aGetGame\x12\x13.service.GetGameReq\x1a\r.service.Game\"\x00\x121\n" +
-	"\bMakeMove\x12\x14.service.MakeMoveReq\x1a\r.service.Game\"\x00\x125\n" +
-	"\vListenSteps\x12\x13.service.GetGameReq\x1a\r.service.Step\"\x000\x01\x12/\n" +
-	"\x06WhoAmI\x12\x12.service.AuthToken\x1a\x0f.service.Player\"\x00B\rZ\vTicTacGo/pbb\x06proto3"
+	"\bMakeMove\x12\x14.service.MakeMoveReq\x1a\r.service.Game\"\x00\x129\n" +
+	"\vListenSteps\x12\x17.service.ListenStepsReq\x1a\r.service.Step\"\x000\x01\x12/\n" +
+	"\x06WhoAmI\x12\x12.service.WhoAmIReq\x1a\x0f.service.Player\"\x00B\rZ\vTicTacGo/pbb\x06proto3"
 
 var (
 	file_pb_tictacgo_proto_rawDescOnce sync.Once
@@ -880,45 +897,46 @@ func file_pb_tictacgo_proto_rawDescGZIP() []byte {
 	return file_pb_tictacgo_proto_rawDescData
 }
 
-var file_pb_tictacgo_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_pb_tictacgo_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_pb_tictacgo_proto_goTypes = []any{
 	(*Player)(nil),                // 0: service.Player
 	(*Players)(nil),               // 1: service.Players
 	(*Game)(nil),                  // 2: service.Game
 	(*Games)(nil),                 // 3: service.Games
 	(*Step)(nil),                  // 4: service.Step
-	(*AuthToken)(nil),             // 5: service.AuthToken
-	(*GetGamesReq)(nil),           // 6: service.GetGamesReq
-	(*GetPlayersReq)(nil),         // 7: service.GetPlayersReq
-	(*GetGameReq)(nil),            // 8: service.GetGameReq
-	(*CreateGameReq)(nil),         // 9: service.CreateGameReq
-	(*MakeMoveReq)(nil),           // 10: service.MakeMoveReq
-	(*CredentialsReq)(nil),        // 11: service.CredentialsReq
-	(*LoginResp)(nil),             // 12: service.LoginResp
-	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
+	(*GetGamesReq)(nil),           // 5: service.GetGamesReq
+	(*GetPlayersReq)(nil),         // 6: service.GetPlayersReq
+	(*GetGameReq)(nil),            // 7: service.GetGameReq
+	(*CreateGameReq)(nil),         // 8: service.CreateGameReq
+	(*MakeMoveReq)(nil),           // 9: service.MakeMoveReq
+	(*CredentialsReq)(nil),        // 10: service.CredentialsReq
+	(*LoginResp)(nil),             // 11: service.LoginResp
+	(*WhoAmIReq)(nil),             // 12: service.WhoAmIReq
+	(*ListenStepsReq)(nil),        // 13: service.ListenStepsReq
+	(*timestamppb.Timestamp)(nil), // 14: google.protobuf.Timestamp
 }
 var file_pb_tictacgo_proto_depIdxs = []int32{
 	0,  // 0: service.Players.players:type_name -> service.Player
 	0,  // 1: service.Game.xPlayer:type_name -> service.Player
 	0,  // 2: service.Game.oPlayer:type_name -> service.Player
-	13, // 3: service.Game.updated_on:type_name -> google.protobuf.Timestamp
-	13, // 4: service.Game.started_on:type_name -> google.protobuf.Timestamp
+	14, // 3: service.Game.updatedOn:type_name -> google.protobuf.Timestamp
+	14, // 4: service.Game.startedOn:type_name -> google.protobuf.Timestamp
 	4,  // 5: service.Game.steps:type_name -> service.Step
 	2,  // 6: service.Games.games:type_name -> service.Game
 	0,  // 7: service.GetGamesReq.xPlayer:type_name -> service.Player
 	0,  // 8: service.GetGamesReq.oPlayer:type_name -> service.Player
 	0,  // 9: service.LoginResp.Player:type_name -> service.Player
-	11, // 10: service.TicTacGoService.Register:input_type -> service.CredentialsReq
-	11, // 11: service.TicTacGoService.Login:input_type -> service.CredentialsReq
-	7,  // 12: service.TicTacGoService.GetPlayers:input_type -> service.GetPlayersReq
-	9,  // 13: service.TicTacGoService.CreateGame:input_type -> service.CreateGameReq
-	6,  // 14: service.TicTacGoService.GetGames:input_type -> service.GetGamesReq
-	8,  // 15: service.TicTacGoService.GetGame:input_type -> service.GetGameReq
-	10, // 16: service.TicTacGoService.MakeMove:input_type -> service.MakeMoveReq
-	8,  // 17: service.TicTacGoService.ListenSteps:input_type -> service.GetGameReq
-	5,  // 18: service.TicTacGoService.WhoAmI:input_type -> service.AuthToken
+	10, // 10: service.TicTacGoService.Register:input_type -> service.CredentialsReq
+	10, // 11: service.TicTacGoService.Login:input_type -> service.CredentialsReq
+	6,  // 12: service.TicTacGoService.GetPlayers:input_type -> service.GetPlayersReq
+	8,  // 13: service.TicTacGoService.CreateGame:input_type -> service.CreateGameReq
+	5,  // 14: service.TicTacGoService.GetGames:input_type -> service.GetGamesReq
+	7,  // 15: service.TicTacGoService.GetGame:input_type -> service.GetGameReq
+	9,  // 16: service.TicTacGoService.MakeMove:input_type -> service.MakeMoveReq
+	13, // 17: service.TicTacGoService.ListenSteps:input_type -> service.ListenStepsReq
+	12, // 18: service.TicTacGoService.WhoAmI:input_type -> service.WhoAmIReq
 	0,  // 19: service.TicTacGoService.Register:output_type -> service.Player
-	12, // 20: service.TicTacGoService.Login:output_type -> service.LoginResp
+	11, // 20: service.TicTacGoService.Login:output_type -> service.LoginResp
 	1,  // 21: service.TicTacGoService.GetPlayers:output_type -> service.Players
 	2,  // 22: service.TicTacGoService.CreateGame:output_type -> service.Game
 	3,  // 23: service.TicTacGoService.GetGames:output_type -> service.Games
@@ -944,7 +962,7 @@ func file_pb_tictacgo_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_tictacgo_proto_rawDesc), len(file_pb_tictacgo_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

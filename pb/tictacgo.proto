@@ -6,26 +6,6 @@ package service;
 
 import "google/protobuf/timestamp.proto";
 
-service TicTacGoService {
-    rpc Register (CredentialsReq) returns (Player) {}
-
-    rpc Login (CredentialsReq) returns (LoginResp) {}
-
-    rpc GetPlayers (GetPlayersReq) returns (Players) {}
-
-    rpc CreateGame (CreateGameReq) returns (Game) {}
-
-    rpc GetGames (GetGamesReq) returns (Games) {}
-
-    rpc GetGame (GetGameReq) returns (Game) {}
-
-    rpc MakeMove (MakeMoveReq) returns (Game) {}
-
-    rpc ListenSteps (GetGameReq) returns (stream Step) {} 
-
-    rpc WhoAmI (AuthToken) returns (Player) {}
-}
-
 message Player {
     int64 id = 1;
     string username = 2;
@@ -42,8 +22,8 @@ message Game {
     Player oPlayer = 3;
     string boardState = 4;
     bool xTurn = 5;
-    google.protobuf.Timestamp updated_on = 6;
-    google.protobuf.Timestamp started_on = 7;
+    google.protobuf.Timestamp updatedOn = 6;
+    google.protobuf.Timestamp startedOn = 7;
     int32 result = 8;
     repeated Step steps = 9;
 }
@@ -62,10 +42,6 @@ message Step {
     int32 result = 7;
 }
 
-message AuthToken {
-    string token = 1;
-}
-
 message GetGamesReq {
     int32 page = 1;
     Player xPlayer = 2;
@@ -82,15 +58,12 @@ message GetGameReq {
     int64 id = 1;
 }
 
-message CreateGameReq {
-    string token = 1;
-}
+message CreateGameReq {}
 
 message MakeMoveReq {
-    string token = 1;
-    int32 row = 2;
-    int32 col = 3;
-    int64 gameId = 4;
+    int32 row = 1;
+    int32 col = 2;
+    int64 gameId = 3;
 }
 
 message CredentialsReq {
@@ -101,4 +74,30 @@ message CredentialsReq {
 message LoginResp {
     string token = 1;
     Player Player = 2;
+}
+
+message WhoAmIReq {}
+
+message ListenStepsReq {
+    int64 id = 1;
+}
+
+service TicTacGoService {
+    rpc Register (CredentialsReq) returns (Player) {}
+
+    rpc Login (CredentialsReq) returns (LoginResp) {}
+
+    rpc GetPlayers (GetPlayersReq) returns (Players) {}
+
+    rpc CreateGame (CreateGameReq) returns (Game) {}
+
+    rpc GetGames (GetGamesReq) returns (Games) {}
+
+    rpc GetGame (GetGameReq) returns (Game) {}
+
+    rpc MakeMove (MakeMoveReq) returns (Game) {}
+
+    rpc ListenSteps (ListenStepsReq) returns (stream Step) {}
+
+    rpc WhoAmI (WhoAmIReq) returns (Player) {}
 }

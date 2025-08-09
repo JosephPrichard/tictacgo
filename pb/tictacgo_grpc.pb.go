@@ -41,8 +41,8 @@ type TicTacGoServiceClient interface {
 	GetGames(ctx context.Context, in *GetGamesReq, opts ...grpc.CallOption) (*Games, error)
 	GetGame(ctx context.Context, in *GetGameReq, opts ...grpc.CallOption) (*Game, error)
 	MakeMove(ctx context.Context, in *MakeMoveReq, opts ...grpc.CallOption) (*Game, error)
-	ListenSteps(ctx context.Context, in *GetGameReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Step], error)
-	WhoAmI(ctx context.Context, in *AuthToken, opts ...grpc.CallOption) (*Player, error)
+	ListenSteps(ctx context.Context, in *ListenStepsReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Step], error)
+	WhoAmI(ctx context.Context, in *WhoAmIReq, opts ...grpc.CallOption) (*Player, error)
 }
 
 type ticTacGoServiceClient struct {
@@ -123,13 +123,13 @@ func (c *ticTacGoServiceClient) MakeMove(ctx context.Context, in *MakeMoveReq, o
 	return out, nil
 }
 
-func (c *ticTacGoServiceClient) ListenSteps(ctx context.Context, in *GetGameReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Step], error) {
+func (c *ticTacGoServiceClient) ListenSteps(ctx context.Context, in *ListenStepsReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Step], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &TicTacGoService_ServiceDesc.Streams[0], TicTacGoService_ListenSteps_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[GetGameReq, Step]{ClientStream: stream}
+	x := &grpc.GenericClientStream[ListenStepsReq, Step]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (c *ticTacGoServiceClient) ListenSteps(ctx context.Context, in *GetGameReq,
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type TicTacGoService_ListenStepsClient = grpc.ServerStreamingClient[Step]
 
-func (c *ticTacGoServiceClient) WhoAmI(ctx context.Context, in *AuthToken, opts ...grpc.CallOption) (*Player, error) {
+func (c *ticTacGoServiceClient) WhoAmI(ctx context.Context, in *WhoAmIReq, opts ...grpc.CallOption) (*Player, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Player)
 	err := c.cc.Invoke(ctx, TicTacGoService_WhoAmI_FullMethodName, in, out, cOpts...)
@@ -163,8 +163,8 @@ type TicTacGoServiceServer interface {
 	GetGames(context.Context, *GetGamesReq) (*Games, error)
 	GetGame(context.Context, *GetGameReq) (*Game, error)
 	MakeMove(context.Context, *MakeMoveReq) (*Game, error)
-	ListenSteps(*GetGameReq, grpc.ServerStreamingServer[Step]) error
-	WhoAmI(context.Context, *AuthToken) (*Player, error)
+	ListenSteps(*ListenStepsReq, grpc.ServerStreamingServer[Step]) error
+	WhoAmI(context.Context, *WhoAmIReq) (*Player, error)
 	mustEmbedUnimplementedTicTacGoServiceServer()
 }
 
@@ -196,10 +196,10 @@ func (UnimplementedTicTacGoServiceServer) GetGame(context.Context, *GetGameReq) 
 func (UnimplementedTicTacGoServiceServer) MakeMove(context.Context, *MakeMoveReq) (*Game, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MakeMove not implemented")
 }
-func (UnimplementedTicTacGoServiceServer) ListenSteps(*GetGameReq, grpc.ServerStreamingServer[Step]) error {
+func (UnimplementedTicTacGoServiceServer) ListenSteps(*ListenStepsReq, grpc.ServerStreamingServer[Step]) error {
 	return status.Errorf(codes.Unimplemented, "method ListenSteps not implemented")
 }
-func (UnimplementedTicTacGoServiceServer) WhoAmI(context.Context, *AuthToken) (*Player, error) {
+func (UnimplementedTicTacGoServiceServer) WhoAmI(context.Context, *WhoAmIReq) (*Player, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WhoAmI not implemented")
 }
 func (UnimplementedTicTacGoServiceServer) mustEmbedUnimplementedTicTacGoServiceServer() {}
@@ -350,18 +350,18 @@ func _TicTacGoService_MakeMove_Handler(srv interface{}, ctx context.Context, dec
 }
 
 func _TicTacGoService_ListenSteps_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(GetGameReq)
+	m := new(ListenStepsReq)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(TicTacGoServiceServer).ListenSteps(m, &grpc.GenericServerStream[GetGameReq, Step]{ServerStream: stream})
+	return srv.(TicTacGoServiceServer).ListenSteps(m, &grpc.GenericServerStream[ListenStepsReq, Step]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type TicTacGoService_ListenStepsServer = grpc.ServerStreamingServer[Step]
 
 func _TicTacGoService_WhoAmI_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AuthToken)
+	in := new(WhoAmIReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ func _TicTacGoService_WhoAmI_Handler(srv interface{}, ctx context.Context, dec f
 		FullMethod: TicTacGoService_WhoAmI_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TicTacGoServiceServer).WhoAmI(ctx, req.(*AuthToken))
+		return srv.(TicTacGoServiceServer).WhoAmI(ctx, req.(*WhoAmIReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
